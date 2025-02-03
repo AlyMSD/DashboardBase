@@ -1,0 +1,38 @@
+[
+    {
+      "name": "SCP",
+      "info1": "Cloud Platform",
+      "info2": "v4.2.1",
+      "info3": "Active",
+      "info4": "High Availability",
+      "info5": "Kubernetes",
+      "info6": "100+ Nodes",
+      "info7": "Prod Ready",
+      "info8": "Multi-tenant",
+      "info9": "SSO Support",
+      "info10": "Auto-scaling",
+      "info11": "CI/CD Integrated",
+      "info12": "Monitoring",
+      "info13": "Terraform",
+      "info14": "GDPR Compliant",
+      "info15": "24/7 Support"
+    },
+    {
+      "name": "SCP2",
+      "info1": "Cloud Platform",
+      "info2": "v4.2.1",
+      "info3": "Active",
+      "info4": "High Availability",
+      "info5": "Kubernetes",
+      "info6": "100+ Nodes",
+      "info7": "Prod Ready",
+      "info8": "Multi-tenant",
+      "info9": "SSO Support",
+      "info10": "Auto-scaling",
+      "info11": "CI/CD Integrated",
+      "info12": "Monitoring",
+      "info13": "Terraform",
+      "info14": "GDPR Compliant",
+      "info15": "24/7 Support"
+    }
+  ]
