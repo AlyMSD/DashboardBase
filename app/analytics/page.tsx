@@ -92,7 +92,82 @@ export default function NameDataDashboard() {
               </Card>
             ))}
           </div>
+          <TooltipProvider>
+            <div className="grid grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>DA Steps Automation</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tooltip>
+                    <TooltipTrigger className="w-full">
+                      <Progress 
+                        value={calculatePercentage(
+                          data.DaSteps.automated.total,
+                          data.DaSteps.manual.total
+                        )}
+                        className="h-2 w-full"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="grid gap-1">
+                        <div className="flex justify-between">
+                          <span className="text-[red]">Automated:</span>
+                          <span>{data.DaSteps.automated.total}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#FFFFFF]">Manual:</span>
+                          <span>{data.DaSteps.manual.total}</span>
+                        </div>
+                        
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {calculatePercentage(data.DaSteps.automated.total, data.DaSteps.manual.total)}% Automated
+                  </div>
+                </CardContent>
+              </Card>
 
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upgrade Steps Automation</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tooltip>
+                    <TooltipTrigger className="w-full">
+                      <Progress 
+                        value={calculatePercentage(
+                          data.upgradeSteps.automated.total,
+                          data.upgradeSteps.manual.total
+                        )}
+                        className="h-2 w-full"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="grid gap-1">
+                        <div className="flex justify-between">
+                          <span className="text-[#82ca9d]">Automated:</span>
+                          <span>{data.upgradeSteps.automated.total}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#8884d8]">Manual:</span>
+                          <span>{data.upgradeSteps.manual.total}</span>
+                        </div>
+                        <div className="flex justify-between border-t pt-1 font-medium">
+                          <span>Total:</span>
+                          <span>{data.upgradeSteps.automated.total + data.upgradeSteps.manual.total}</span>
+                        </div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {calculatePercentage(data.upgradeSteps.automated.total, data.upgradeSteps.manual.total)}% Automated
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TooltipProvider>
           <div className="grid md:grid-cols-2 gap-6 mt-6">
             <Card>
               <CardHeader>
