@@ -177,25 +177,38 @@ export default function FormPage() {
         );
       
       case 'radio':
-        return (
-          <div className="space-y-2" key={question.id}>
-            <div>
-              {question.label} {question.required && <span className="text-red-500">*</span>}
-            </div>
-            <RadioGroup
-              value={formData[question.id] || ''}
-              onValueChange={(value) => handleInputChange(question.id, value)}
-              required={question.required}
-            >
-              {question.options.map((option) => (
-                <div className="flex items-center space-x-2" key={option}>
-                  <RadioGroupItem value={option} id={`${question.id}-${option}`} />
-                  <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
-                </div>
-              ))}
-            </RadioGroup>
+  return (
+    <div className="space-y-2" key={question.id}>
+      <div>
+        {question.label} {question.required && <span className="text-red-500">*</span>}
+      </div>
+      <RadioGroup
+        value={formData[question.id] || ''}
+        onValueChange={(value) => handleInputChange(question.id, value)}
+        required={question.required}
+      >
+        {question.options.map((option) => (
+          <div className="flex items-center space-x-2" key={option}>
+            <RadioGroupItem value={option} id={`${question.id}-${option}`} />
+            <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
           </div>
-        );
+        ))}
+      </RadioGroup>
+      {/* If the selected radio option is "Other", display a text input for custom value */}
+      {formData[question.id] === 'Other' && (
+        <div className="mt-2">
+          <Input
+            id={`${question.id}_other`}
+            placeholder="Please specify"
+            value={formData[`${question.id}_other`] || ''}
+            onChange={(e) => handleInputChange(`${question.id}_other`, e.target.value)}
+            required={question.required}
+          />
+        </div>
+      )}
+    </div>
+  );
+
       
       case 'file':
         return (
