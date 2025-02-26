@@ -17,95 +17,91 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Upload } from 'lucide-react';
 
 export default function FormPage() {
+  // Available forms (could also be loaded from your backend)
+  const forms = ['Employee Survey', 'Project Feedback', 'IT Support Request', 'Event Registration'];
+
   const [selectedForm, setSelectedForm] = useState('');
+  const [loadedFormDefinition, setLoadedFormDefinition] = useState(null);
   const [formData, setFormData] = useState({});
-  const [fileUploads, setFileUploads] = useState({});
+  const [fileUploads, setFileUploads] = useState({}); // Stores arrays of files per question id
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Available forms
-  const forms = ['Add NF'];
-
-  // Sample form definitions (these would come from your backend)
-  const formDefinitions = {
-    'Add NF': {
-      title: 'Add NF Automation',
-      description: 'Add all automations related to an NF.',
-      questions: [
-        {
-            id: 'nf-name',
-            type: 'dropdown',
-            label: 'NF Name',
-            options: ['SCP', 'VDU', 'Uh', 'idk', 'what', 'other', 'Nfs'],
-            required: true
-          },
-        {
-          id: 'email',
-          type: 'text',
-          label: 'Email Address',
-          placeholder: 'Enter your email address',
-          required: true
-        },
-        {
-          id: 'description',
-          type: 'textarea',
-          label: 'Description',
-          placeholder: 'Please describe the automations in detail...',
-          required: true
-        },
-        {
-          id: 'MOP',
-          type: 'file',
-          label: 'MOP',
-          allowedTypes: ['application/pdf'],
-          required: true
-        }
-      ]
-    }
-    
-  };
-
-  // Handle form selection
-  const handleFormSelect = (formName) => {
+  // Called when a form is selected; fetch the form definition and any existing responses.
+  const handleFormSelect = async (formName) => {
     setSelectedForm(formName);
     setFormData({});
     setFileUploads({});
     setSubmitted(false);
+
+    try {
+      const res = await fetch(`/api/form?name=${encodeURIComponent(formName)}`);
+      const data = await res.json();
+      if (data.form) {
+        setLoadedFormDefinition(data.form);
+      }
+      if (data.response && data.response.data) {
+        setFormData(data.response.data);
+      }
+    } catch (err) {
+      console.error('Error loading form', err);
+    }
   };
 
-  // Handle input change
+  // Handle input changes for text, textarea, radio, dropdown etc.
   const handleInputChange = (questionId, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [questionId]: value
+      [questionId]: value,
     }));
   };
 
-  // Handle file upload
+  // Handle file uploads (supporting multiple files per field)
   const handleFileUpload = (questionId, files) => {
     if (files && files.length > 0) {
-      setFileUploads(prev => ({
+      // Store an array of File objects
+      setFileUploads((prev) => ({
         ...prev,
-        [questionId]: files[0]
+        [questionId]: Array.from(files),
       }));
     }
   };
 
-  // Handle form submission
-  const handleSubmit = (e) => {
+  // Handle form submission: send form data and file uploads to the backend.
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Form data submitted:', formData);
-      console.log('File uploads:', fileUploads);
-      setSubmitting(false);
+
+    try {
+      // Use FormData to mix JSON fields and files.
+      const payload = new FormData();
+      // Append all non-file fields.
+      Object.keys(formData).forEach((key) => {
+        payload.append(key, formData[key]);
+      });
+      
+      // Append file uploads (each question id key may have multiple files)
+      Object.keys(fileUploads).forEach((key) => {
+        fileUploads[key].forEach((file) => {
+          payload.append(key, file);
+        });
+      });
+
+      const res = await fetch(`/api/form?name=${encodeURIComponent(selectedForm)}`, {
+        method: 'POST',
+        body: payload,
+      });
+      const result = await res.json();
+      console.log('Response:', result);
       setSubmitted(true);
-    }, 1500);
+    } catch (err) {
+      console.error('Error submitting form', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // Render individual form field based on type
+  // Render individual form fields based on the question type.
   const renderFormField = (question) => {
     switch (question.type) {
       case 'text':
@@ -114,7 +110,7 @@ export default function FormPage() {
             <Label htmlFor={question.id}>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
-            <Input 
+            <Input
               id={question.id}
               placeholder={question.placeholder || ''}
               value={formData[question.id] || ''}
@@ -130,7 +126,7 @@ export default function FormPage() {
             <Label htmlFor={question.id}>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
-            <Textarea 
+            <Textarea
               id={question.id}
               placeholder={question.placeholder || ''}
               value={formData[question.id] || ''}
@@ -147,8 +143,8 @@ export default function FormPage() {
             <Label htmlFor={question.id}>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
-            <Select 
-              value={formData[question.id] || ''} 
+            <Select
+              value={formData[question.id] || ''}
               onValueChange={(value) => handleInputChange(question.id, value)}
               required={question.required}
             >
@@ -169,8 +165,8 @@ export default function FormPage() {
       case 'checkbox':
         return (
           <div className="flex items-center space-x-2 py-4" key={question.id}>
-            <Checkbox 
-              id={question.id} 
+            <Checkbox
+              id={question.id}
               checked={formData[question.id] || false}
               onCheckedChange={(checked) => handleInputChange(question.id, checked)}
             />
@@ -186,8 +182,8 @@ export default function FormPage() {
             <div>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </div>
-            <RadioGroup 
-              value={formData[question.id] || ''} 
+            <RadioGroup
+              value={formData[question.id] || ''}
               onValueChange={(value) => handleInputChange(question.id, value)}
               required={question.required}
             >
@@ -207,16 +203,16 @@ export default function FormPage() {
             <Label htmlFor={question.id}>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
-            <div 
+            <div
               className="border-2 border-dashed border-gray-300 rounded-md p-6 cursor-pointer hover:bg-gray-50 transition-colors"
               onClick={() => document.getElementById(question.id).click()}
             >
               <div className="flex flex-col items-center justify-center">
                 <Upload className="h-10 w-10 text-gray-400 mb-2" />
                 <div className="text-sm text-gray-600">
-                  {fileUploads[question.id] ? 
-                    fileUploads[question.id].name : 
-                    'Click to upload or drag and drop'}
+                  {fileUploads[question.id] && fileUploads[question.id].length > 0
+                    ? fileUploads[question.id].map(file => file.name).join(', ')
+                    : 'Click to upload or drag and drop'}
                 </div>
                 <div className="text-xs text-gray-400 mt-1">
                   {question.allowedTypes?.map(type => {
@@ -231,6 +227,7 @@ export default function FormPage() {
                 id={question.id}
                 type="file"
                 className="hidden"
+                multiple
                 accept={question.allowedTypes?.join(',')}
                 onChange={(e) => handleFileUpload(question.id, e.target.files)}
                 required={question.required}
@@ -261,21 +258,23 @@ export default function FormPage() {
         </Select>
       </div>
 
-      {selectedForm && (
+      {selectedForm && loadedFormDefinition && (
         <div className="relative border border-dashed border-gray-300 rounded-lg">
           <Card className="h-full">
             <CardHeader>
-              <CardTitle>{formDefinitions[selectedForm].title}</CardTitle>
-              <div className="text-gray-500 mt-1">{formDefinitions[selectedForm].description}</div>
+              <CardTitle>{loadedFormDefinition.title}</CardTitle>
+              <div className="text-gray-500 mt-1">{loadedFormDefinition.description}</div>
             </CardHeader>
             <CardContent>
               {submitted ? (
                 <div className="py-8 text-center">
-                  <div className="text-green-500 text-2xl font-semibold mb-2">Form Submitted Successfully!</div>
+                  <div className="text-green-500 text-2xl font-semibold mb-2">
+                    Form Submitted Successfully!
+                  </div>
                   <p className="text-gray-600">Thank you for your submission.</p>
-                  <Button 
-                    className="mt-4" 
-                    variant="outline" 
+                  <Button
+                    className="mt-4"
+                    variant="outline"
                     onClick={() => {
                       setFormData({});
                       setFileUploads({});
@@ -287,8 +286,16 @@ export default function FormPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  {formDefinitions[selectedForm].questions.map(renderFormField)}
-                  
+                  {loadedFormDefinition.questions.map((question) => {
+                    // Check for conditional display.
+                    if (question.conditional) {
+                      const { questionId, value } = question.conditional;
+                      if (formData[questionId] !== value) {
+                        return null;
+                      }
+                    }
+                    return renderFormField(question);
+                  })}
                   <div className="pt-4">
                     <Button type="submit" disabled={submitting}>
                       {submitting ? 'Submitting...' : 'Submit Form'}
