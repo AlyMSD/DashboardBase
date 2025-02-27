@@ -17,17 +17,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Upload, Trash } from 'lucide-react';
 
 export default function FormPage() {
-  // Available forms (could also be loaded from your backend)
   const forms = ['Employee Survey', 'Project Feedback', 'IT Support Request', 'Event Registration'];
-
   const [selectedForm, setSelectedForm] = useState('');
   const [loadedFormDefinition, setLoadedFormDefinition] = useState(null);
   const [formData, setFormData] = useState({});
-  const [fileUploads, setFileUploads] = useState({}); // Stores arrays of File objects per question id
+  const [fileUploads, setFileUploads] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // Delete handler for uploaded files
   const handleDeleteFile = (questionId, index, source) => {
     if (source === 'existing') {
       setFormData((prev) => {
@@ -46,7 +43,6 @@ export default function FormPage() {
     }
   };
 
-  // Called when a form is selected; fetch the form definition and any existing responses.
   const handleFormSelect = async (formName) => {
     setSelectedForm(formName);
     setFormData({});
@@ -55,36 +51,23 @@ export default function FormPage() {
 
     try {
       const res = await fetch(`/api/form?name=${encodeURIComponent(formName)}`);
-      if (!res.ok) {
-        console.error('Failed to fetch form. Status:', res.status);
-        return;
-      }
+      if (!res.ok) return;
       const data = await res.json();
-      console.log("Fetched form data:", data); // Debugging
       if (data) {
         setLoadedFormDefinition(data);
-        // Prefill the form if there are saved answers under "answers"
-        if (data.answers) {
-          setFormData(data.answers);
-        }
+        if (data.answers) setFormData(data.answers);
       }
     } catch (err) {
       console.error('Error loading form', err);
     }
   };
 
-  // Handle input changes for text, textarea, radio, dropdown etc.
   const handleInputChange = (questionId, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [questionId]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  // Handle file uploads (supporting multiple files per field)
   const handleFileUpload = (questionId, files) => {
-    if (files && files.length > 0) {
-      // Store an array of File objects
+    if (files?.length) {
       setFileUploads((prev) => ({
         ...prev,
         [questionId]: Array.from(files),
@@ -92,32 +75,21 @@ export default function FormPage() {
     }
   };
 
-  // Handle form submission: send form data and file uploads to the backend.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      // Use FormData to mix JSON fields and files.
       const payload = new FormData();
-      // Append all non-file fields.
-      Object.keys(formData).forEach((key) => {
-        payload.append(key, formData[key]);
-      });
-      
-      // Append file uploads (each question id key may have multiple files)
-      Object.keys(fileUploads).forEach((key) => {
-        fileUploads[key].forEach((file) => {
-          payload.append(key, file);
-        });
-      });
+      Object.keys(formData).forEach((key) => payload.append(key, formData[key]));
+      Object.keys(fileUploads).forEach((key) => 
+        fileUploads[key].forEach((file) => payload.append(key, file))
+      );
 
-      const res = await fetch(`/api/form?name=${encodeURIComponent(selectedForm)}`, {
+      await fetch(`/api/form?name=${encodeURIComponent(selectedForm)}`, {
         method: 'POST',
         body: payload,
       });
-      const result = await res.json();
-      console.log('Response:', result);
       setSubmitted(true);
     } catch (err) {
       console.error('Error submitting form', err);
@@ -126,7 +98,6 @@ export default function FormPage() {
     }
   };
 
-  // Render individual form fields based on the question type.
   const renderFormField = (question) => {
     switch (question.type) {
       case 'text':
@@ -144,7 +115,7 @@ export default function FormPage() {
             />
           </div>
         );
-      
+
       case 'textarea':
         return (
           <div className="space-y-2" key={question.id}>
@@ -161,7 +132,7 @@ export default function FormPage() {
             />
           </div>
         );
-      
+
       case 'dropdown':
         return (
           <div className="space-y-2" key={question.id}>
@@ -178,15 +149,13 @@ export default function FormPage() {
               </SelectTrigger>
               <SelectContent>
                 {question.options.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
+                  <SelectItem key={option} value={option}>{option}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         );
-      
+
       case 'checkbox':
         return (
           <div className="flex items-center space-x-2 py-4" key={question.id}>
@@ -200,7 +169,7 @@ export default function FormPage() {
             </Label>
           </div>
         );
-      
+
       case 'radio':
         return (
           <div className="space-y-2" key={question.id}>
@@ -219,7 +188,6 @@ export default function FormPage() {
                 </div>
               ))}
             </RadioGroup>
-            {/* If the selected radio option is "Other", display a text input for custom value */}
             {formData[question.id] === 'Other' && (
               <div className="mt-2">
                 <Input
@@ -233,9 +201,8 @@ export default function FormPage() {
             )}
           </div>
         );
-      
+
       case 'file': {
-        // Combine previously uploaded files (from formData) and new uploads (from fileUploads)
         const existingFiles = formData[question.id] || [];
         const newFiles = fileUploads[question.id] || [];
         return (
@@ -243,8 +210,6 @@ export default function FormPage() {
             <Label htmlFor={question.id}>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
-
-            {/* List uploaded files with delete icons */}
             {(existingFiles.length > 0 || newFiles.length > 0) && (
               <div className="mb-2">
                 <ul>
@@ -272,16 +237,13 @@ export default function FormPage() {
                 </ul>
               </div>
             )}
-
             <div
               className="border-2 border-dashed border-gray-300 rounded-md p-6 cursor-pointer hover:bg-gray-50 transition-colors"
               onClick={() => document.getElementById(question.id).click()}
             >
               <div className="flex flex-col items-center justify-center">
                 <Upload className="h-10 w-10 text-gray-400 mb-2" />
-                <div className="text-sm text-gray-600">
-                  Click to upload or drag and drop
-                </div>
+                <div className="text-sm text-gray-600">Click to upload or drag and drop</div>
                 <div className="text-xs text-gray-400 mt-1">
                   {question.allowedTypes?.map((type) => {
                     if (type === 'image/*') return 'Images';
@@ -310,6 +272,63 @@ export default function FormPage() {
     }
   };
 
+  const renderFormContent = () => {
+    if (submitted) {
+      return (
+        <div className="py-8 text-center">
+          <div className="text-green-500 text-2xl font-semibold mb-2">
+            Form Submitted Successfully!
+          </div>
+          <p className="text-gray-600">Thank you for your submission.</p>
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => {
+              setFormData({});
+              setFileUploads({});
+              setSubmitted(false);
+            }}
+          >
+            Submit Another Response
+          </Button>
+        </div>
+      );
+    }
+
+    const groupedQuestions = loadedFormDefinition.questions.reduce((acc, question) => {
+      const header = question.header || 'Additional Information';
+      if (!acc[header]) acc[header] = [];
+      acc[header].push(question);
+      return acc;
+    }, {});
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {Object.entries(groupedQuestions).map(([header, questions]) => (
+          <div key={header} className="space-y-6">
+            <div className="border-b border-gray-200 pb-2">
+              <h3 className="text-lg font-semibold text-gray-900">{header}</h3>
+            </div>
+            <div className="space-y-4">
+              {questions.map((question) => {
+                if (question.conditional) {
+                  const { questionId, value } = question.conditional;
+                  if (formData[questionId] !== value) return null;
+                }
+                return renderFormField(question);
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="pt-4">
+          <Button type="submit" disabled={submitting}>
+            {submitting ? 'Submitting...' : 'Submit Form'}
+          </Button>
+        </div>
+      </form>
+    );
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex space-x-4">
@@ -319,9 +338,7 @@ export default function FormPage() {
           </SelectTrigger>
           <SelectContent>
             {forms.map((form) => (
-              <SelectItem key={form} value={form}>
-                {form}
-              </SelectItem>
+              <SelectItem key={form} value={form}>{form}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -335,43 +352,7 @@ export default function FormPage() {
               <div className="text-gray-500 mt-1">{loadedFormDefinition.description}</div>
             </CardHeader>
             <CardContent>
-              {submitted ? (
-                <div className="py-8 text-center">
-                  <div className="text-green-500 text-2xl font-semibold mb-2">
-                    Form Submitted Successfully!
-                  </div>
-                  <p className="text-gray-600">Thank you for your submission.</p>
-                  <Button
-                    className="mt-4"
-                    variant="outline"
-                    onClick={() => {
-                      setFormData({});
-                      setFileUploads({});
-                      setSubmitted(false);
-                    }}
-                  >
-                    Submit Another Response
-                  </Button>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {loadedFormDefinition.questions.map((question) => {
-                    // Check for conditional display.
-                    if (question.conditional) {
-                      const { questionId, value } = question.conditional;
-                      if (formData[questionId] !== value) {
-                        return null;
-                      }
-                    }
-                    return renderFormField(question);
-                  })}
-                  <div className="pt-4">
-                    <Button type="submit" disabled={submitting}>
-                      {submitting ? 'Submitting...' : 'Submit Form'}
-                    </Button>
-                  </div>
-                </form>
-              )}
+              {renderFormContent()}
             </CardContent>
           </Card>
         </div>
