@@ -166,19 +166,41 @@ export default function FormPage() {
               {question.options.map((option) => {
                 const isChecked = (formData[question.id] || []).includes(option);
                 return (
-                  <div key={option} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`${question.id}-${option}`}
-                      checked={isChecked}
-                      onCheckedChange={(checked) => {
-                        const selected = formData[question.id] || [];
-                        const newSelected = checked
-                          ? [...selected, option]
-                          : selected.filter(item => item !== option);
-                        handleInputChange(question.id, newSelected);
-                      }}
-                    />
-                    <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+                  <div key={option} className="flex flex-col space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`${question.id}-${option}`}
+                        checked={isChecked}
+                        onCheckedChange={(checked) => {
+                          const selected = formData[question.id] || [];
+                          let newSelected;
+                          
+                          if (checked) {
+                            newSelected = [...selected, option];
+                          } else {
+                            newSelected = selected.filter(item => item !== option);
+                            // Clear other input if unchecking "Other"
+                            if (option === 'Other') {
+                              handleInputChange(`${question.id}_other`, '');
+                            }
+                          }
+                          handleInputChange(question.id, newSelected);
+                        }}
+                      />
+                      <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+                    </div>
+                    
+                    {/* Show text input when "Other" is checked */}
+                    {option === 'Other' && isChecked && (
+                      <div className="ml-6">
+                        <Input
+                          placeholder="Please specify"
+                          value={formData[`${question.id}_other`] || ''}
+                          onChange={(e) => handleInputChange(`${question.id}_other`, e.target.value)}
+                          required={question.required}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
