@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Upload } from 'lucide-react';
+import { Upload, Trash } from 'lucide-react';
 
 export default function FormPage() {
   // Available forms (could also be loaded from your backend)
@@ -23,9 +23,28 @@ export default function FormPage() {
   const [selectedForm, setSelectedForm] = useState('');
   const [loadedFormDefinition, setLoadedFormDefinition] = useState(null);
   const [formData, setFormData] = useState({});
-  const [fileUploads, setFileUploads] = useState({}); // Stores arrays of files per question id
+  const [fileUploads, setFileUploads] = useState({}); // Stores arrays of File objects per question id
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // Delete handler for uploaded files
+  const handleDeleteFile = (questionId, index, source) => {
+    if (source === 'existing') {
+      setFormData((prev) => {
+        const currentFiles = prev[questionId] || [];
+        const updatedFiles = [...currentFiles];
+        updatedFiles.splice(index, 1);
+        return { ...prev, [questionId]: updatedFiles };
+      });
+    } else if (source === 'new') {
+      setFileUploads((prev) => {
+        const currentFiles = prev[questionId] || [];
+        const updatedFiles = [...currentFiles];
+        updatedFiles.splice(index, 1);
+        return { ...prev, [questionId]: updatedFiles };
+      });
+    }
+  };
 
   // Called when a form is selected; fetch the form definition and any existing responses.
   const handleFormSelect = async (formName) => {
@@ -36,12 +55,18 @@ export default function FormPage() {
 
     try {
       const res = await fetch(`/api/form?name=${encodeURIComponent(formName)}`);
-      const data = await res.json();
-      if (data.form) {
-        setLoadedFormDefinition(data.form);
+      if (!res.ok) {
+        console.error('Failed to fetch form. Status:', res.status);
+        return;
       }
-      if (data.response && data.response.data) {
-        setFormData(data.response.data);
+      const data = await res.json();
+      console.log("Fetched form data:", data); // Debugging
+      if (data) {
+        setLoadedFormDefinition(data);
+        // Prefill the form if there are saved answers under "answers"
+        if (data.answers) {
+          setFormData(data.answers);
+        }
       }
     } catch (err) {
       console.error('Error loading form', err);
@@ -177,45 +202,77 @@ export default function FormPage() {
         );
       
       case 'radio':
-  return (
-    <div className="space-y-2" key={question.id}>
-      <div>
-        {question.label} {question.required && <span className="text-red-500">*</span>}
-      </div>
-      <RadioGroup
-        value={formData[question.id] || ''}
-        onValueChange={(value) => handleInputChange(question.id, value)}
-        required={question.required}
-      >
-        {question.options.map((option) => (
-          <div className="flex items-center space-x-2" key={option}>
-            <RadioGroupItem value={option} id={`${question.id}-${option}`} />
-            <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+        return (
+          <div className="space-y-2" key={question.id}>
+            <div>
+              {question.label} {question.required && <span className="text-red-500">*</span>}
+            </div>
+            <RadioGroup
+              value={formData[question.id] || ''}
+              onValueChange={(value) => handleInputChange(question.id, value)}
+              required={question.required}
+            >
+              {question.options.map((option) => (
+                <div className="flex items-center space-x-2" key={option}>
+                  <RadioGroupItem value={option} id={`${question.id}-${option}`} />
+                  <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+            {/* If the selected radio option is "Other", display a text input for custom value */}
+            {formData[question.id] === 'Other' && (
+              <div className="mt-2">
+                <Input
+                  id={`${question.id}_other`}
+                  placeholder="Please specify"
+                  value={formData[`${question.id}_other`] || ''}
+                  onChange={(e) => handleInputChange(`${question.id}_other`, e.target.value)}
+                  required={question.required}
+                />
+              </div>
+            )}
           </div>
-        ))}
-      </RadioGroup>
-      {/* If the selected radio option is "Other", display a text input for custom value */}
-      {formData[question.id] === 'Other' && (
-        <div className="mt-2">
-          <Input
-            id={`${question.id}_other`}
-            placeholder="Please specify"
-            value={formData[`${question.id}_other`] || ''}
-            onChange={(e) => handleInputChange(`${question.id}_other`, e.target.value)}
-            required={question.required}
-          />
-        </div>
-      )}
-    </div>
-  );
-
+        );
       
-      case 'file':
+      case 'file': {
+        // Combine previously uploaded files (from formData) and new uploads (from fileUploads)
+        const existingFiles = formData[question.id] || [];
+        const newFiles = fileUploads[question.id] || [];
         return (
           <div className="space-y-2" key={question.id}>
             <Label htmlFor={question.id}>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
+
+            {/* List uploaded files with delete icons */}
+            {(existingFiles.length > 0 || newFiles.length > 0) && (
+              <div className="mb-2">
+                <ul>
+                  {existingFiles.map((filePath, index) => {
+                    const fileName = filePath.split('/').pop();
+                    return (
+                      <li key={`existing-${index}`} className="flex items-center justify-between text-sm">
+                        <span>{fileName}</span>
+                        <Trash
+                          className="h-4 w-4 text-red-500 cursor-pointer"
+                          onClick={() => handleDeleteFile(question.id, index, 'existing')}
+                        />
+                      </li>
+                    );
+                  })}
+                  {newFiles.map((file, index) => (
+                    <li key={`new-${index}`} className="flex items-center justify-between text-sm">
+                      <span>{file.name}</span>
+                      <Trash
+                        className="h-4 w-4 text-red-500 cursor-pointer"
+                        onClick={() => handleDeleteFile(question.id, index, 'new')}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div
               className="border-2 border-dashed border-gray-300 rounded-md p-6 cursor-pointer hover:bg-gray-50 transition-colors"
               onClick={() => document.getElementById(question.id).click()}
@@ -223,12 +280,10 @@ export default function FormPage() {
               <div className="flex flex-col items-center justify-center">
                 <Upload className="h-10 w-10 text-gray-400 mb-2" />
                 <div className="text-sm text-gray-600">
-                  {fileUploads[question.id] && fileUploads[question.id].length > 0
-                    ? fileUploads[question.id].map(file => file.name).join(', ')
-                    : 'Click to upload or drag and drop'}
+                  Click to upload or drag and drop
                 </div>
                 <div className="text-xs text-gray-400 mt-1">
-                  {question.allowedTypes?.map(type => {
+                  {question.allowedTypes?.map((type) => {
                     if (type === 'image/*') return 'Images';
                     if (type === 'application/pdf') return 'PDFs';
                     if (type === 'application/msword') return 'Word docs';
@@ -248,7 +303,8 @@ export default function FormPage() {
             </div>
           </div>
         );
-      
+      }
+
       default:
         return null;
     }
