@@ -158,15 +158,31 @@ export default function FormPage() {
 
       case 'checkbox':
         return (
-          <div className="flex items-center space-x-2 py-4" key={question.id}>
-            <Checkbox
-              id={question.id}
-              checked={formData[question.id] || false}
-              onCheckedChange={(checked) => handleInputChange(question.id, checked)}
-            />
-            <Label htmlFor={question.id}>
+          <div className="space-y-2" key={question.id}>
+            <Label>
               {question.label} {question.required && <span className="text-red-500">*</span>}
             </Label>
+            <div className="space-y-2">
+              {question.options.map((option) => {
+                const isChecked = (formData[question.id] || []).includes(option);
+                return (
+                  <div key={option} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`${question.id}-${option}`}
+                      checked={isChecked}
+                      onCheckedChange={(checked) => {
+                        const selected = formData[question.id] || [];
+                        const newSelected = checked
+                          ? [...selected, option]
+                          : selected.filter(item => item !== option);
+                        handleInputChange(question.id, newSelected);
+                      }}
+                    />
+                    <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
 
