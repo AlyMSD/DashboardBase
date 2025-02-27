@@ -187,19 +187,51 @@ export default function FormPage() {
           </div>
         );
       
-      case 'checkbox':
-        return (
-          <div className="flex items-center space-x-2 py-4" key={question.id}>
-            <Checkbox
-              id={question.id}
-              checked={formData[question.id] || false}
-              onCheckedChange={(checked) => handleInputChange(question.id, checked)}
-            />
-            <Label htmlFor={question.id}>
-              {question.label} {question.required && <span className="text-red-500">*</span>}
-            </Label>
-          </div>
-        );
+      case 'checkbox': {
+  // If options are provided, allow multiple selections.
+  if (question.options && question.options.length > 0) {
+    const selectedOptions = formData[question.id] || [];
+    return (
+      <div className="space-y-2" key={question.id}>
+        <div>
+          {question.label} {question.required && <span className="text-red-500">*</span>}
+        </div>
+        <div className="flex flex-col space-y-2">
+          {question.options.map((option) => (
+            <div key={option} className="flex items-center space-x-2">
+              <Checkbox
+                id={`${question.id}-${option}`}
+                checked={selectedOptions.includes(option)}
+                onCheckedChange={(checked) => {
+                  let newSelected;
+                  if (checked) {
+                    newSelected = [...selectedOptions, option];
+                  } else {
+                    newSelected = selectedOptions.filter((opt) => opt !== option);
+                  }
+                  handleInputChange(question.id, newSelected);
+                }}
+              />
+              <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  } else {
+    // Fallback: a single checkbox if no options array is provided.
+    return (
+      <div className="flex items-center space-x-2 py-4" key={question.id}>
+        <Checkbox
+          id={question.id}
+          checked={formData[question.id] || false}
+          onCheckedChange={(checked) => handleInputChange(question.id, checked)}
+        />
+        <Label htmlFor={question.id}>
+          {question.label} {question.required && <span className="text-red-500">*</span>}
+        </Label>
+      </div>
+    );
       
       case 'radio':
         return (
