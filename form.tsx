@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, ChevronsUpDown, Upload, Trash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,17 +22,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Upload, Trash } from 'lucide-react';
 
 export default function FormPage() {
-  // Array of form names (acting as a dictionary with identical keys and values)
   const forms = [
     'Employee Survey',
     'Project Feedback',
     'IT Support Request',
     'Event Registration',
+    'User Info'
   ];
 
+  // State for form selection and version handling.
   const [selectedForm, setSelectedForm] = useState('');
   const [comboboxValue, setComboboxValue] = useState('');
   const [open, setOpen] = useState(false);
@@ -41,7 +41,20 @@ export default function FormPage() {
   const [fileUploads, setFileUploads] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [currentSection, setCurrentSection] = useState(0);
 
+  // Version states: selectedVersion is used both for editing and for selecting an existing version.
+  const [selectedVersion, setSelectedVersion] = useState('');
+  const [availableVersions, setAvailableVersions] = useState([]);
+
+  // Flag to indicate a clone (new version) action.
+  const [isCloning, setIsCloning] = useState(false);
+
+  // Use a key that includes both form and version.
+  const LOCAL_STORAGE_KEY = (formName, version) =>
+    `form_${formName}_v_${version}_submission`;
+
+  // Delete file from either existing answer array or new uploads.
   const handleDeleteFile = (questionId, index, source) => {
     if (source === 'existing') {
       setFormData((prev) => {
@@ -60,56 +73,125 @@ export default function FormPage() {
     }
   };
 
-  const handleFormSelect = async (formName) => {
-    setSelectedForm(formName);
-    setFormData({});
-    setFileUploads({});
-    setSubmitted(false);
-
+  // Fetch form definition for a given form and version.
+  const fetchFormDefinition = async (formName, version = '') => {
     try {
-      const res = await fetch(`/api/form?name=${encodeURIComponent(formName)}`);
+      let url = `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(formName)}`;
+      if (version) url += `&version=${encodeURIComponent(version)}`;
+      const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
       if (data) {
         setLoadedFormDefinition(data);
-        if (data.answers) setFormData(data.answers);
+        // Set available versions if the backend sends an array.
+        if (data.versions && Array.isArray(data.versions)) {
+          setAvailableVersions(data.versions);
+        } else {
+          setAvailableVersions([data.version_name]);
+        }
+        // Set selected version to the fetched version if not cloning.
+        if (!isCloning) setSelectedVersion(data.version_name);
+
+        // Build initial formData from DB data.
+        const initialFormData = {};
+        data.sections.forEach((section) => {
+          section.questions.forEach((question) => {
+            if (question.type === 'file') {
+              initialFormData[question.id] = question.answer || [];
+            } else {
+              initialFormData[question.id] =
+                question.answer !== null && question.answer !== undefined
+                  ? question.answer
+                  : '';
+            }
+          });
+        });
+        // If a previous submission exists (based on form and version), load it.
+        const savedSubmission = localStorage.getItem(
+          LOCAL_STORAGE_KEY(formName, version || data.version_name)
+        );
+        if (savedSubmission) {
+          const parsed = JSON.parse(savedSubmission);
+          Object.keys(parsed).forEach((key) => {
+            initialFormData[key] = parsed[key];
+          });
+        }
+        setFormData(initialFormData);
       }
     } catch (err) {
       console.error('Error loading form', err);
     }
   };
 
+  // When a user selects a form from the list.
+  const handleFormSelect = async (formName) => {
+    setSelectedForm(formName);
+    setFormData({});
+    setFileUploads({});
+    setSubmitted(false);
+    setCurrentSection(0);
+    setIsCloning(false);
+    // Clear version-related states.
+    setSelectedVersion('');
+    setAvailableVersions([]);
+    await fetchFormDefinition(formName);
+  };
+
+  // Handle version selection from the versions combo box.
+  const handleVersionSelect = async (version) => {
+    // When selecting an existing version, we reset the cloning flag.
+    setIsCloning(false);
+    setSelectedVersion(version);
+    setFormData({});
+    setFileUploads({});
+    setSubmitted(false);
+    setCurrentSection(0);
+    await fetchFormDefinition(selectedForm, version);
+  };
+
+  // Handle input change for form fields.
   const handleInputChange = (questionId, value) => {
     setFormData((prev) => ({ ...prev, [questionId]: value }));
   };
 
+  // Append newly uploaded files.
   const handleFileUpload = (questionId, files) => {
     if (files?.length) {
       setFileUploads((prev) => ({
         ...prev,
-        [questionId]: Array.from(files),
+        [questionId]: [...(prev[questionId] || []), ...Array.from(files)],
       }));
     }
   };
 
+  // On form submission, include the version name.
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
       const payload = new FormData();
+      // Append formData fields.
       Object.keys(formData).forEach((key) =>
         payload.append(key, formData[key])
       );
-      Object.keys(fileUploads).forEach((key) =>
-        fileUploads[key].forEach((file) => payload.append(key, file))
-      );
+      // Append files.
+      Object.keys(fileUploads).forEach((key) => {
+        fileUploads[key].forEach((file) => payload.append(key, file));
+      });
+      // Append the version name.
+      payload.append('version_name', selectedVersion);
 
-      await fetch(`/api/form?name=${encodeURIComponent(selectedForm)}`, {
+      await fetch(`http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`, {
         method: 'POST',
         body: payload,
       });
       setSubmitted(true);
+      // Save the submission in local storage based on form and version.
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY(selectedForm, selectedVersion),
+        JSON.stringify(formData)
+      );
     } catch (err) {
       console.error('Error submitting form', err);
     } finally {
@@ -117,6 +199,7 @@ export default function FormPage() {
     }
   };
 
+  // Render a field based on its type.
   const renderFormField = (question) => {
     switch (question.type) {
       case 'text':
@@ -170,7 +253,6 @@ export default function FormPage() {
               value={formData[question.id] || ''}
               onChange={(e) => {
                 const value = e.target.value;
-                // Only allow integer values (empty string allowed)
                 if (/^\d*$/.test(value)) {
                   handleInputChange(question.id, value);
                 }
@@ -393,6 +475,59 @@ export default function FormPage() {
     }
   };
 
+  // Render the current section (page) with a page tracker.
+  const renderSection = () => {
+    if (!loadedFormDefinition) return null;
+    const sections = loadedFormDefinition.sections;
+    const section = sections[currentSection];
+
+    return (
+      <>
+        <div className="mb-4">
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              Section {currentSection + 1} of {sections.length}
+            </div>
+            <div className="space-x-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCurrentSection((prev) => prev - 1)}
+                disabled={currentSection === 0}
+              >
+                Previous
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCurrentSection((prev) => prev + 1)}
+                disabled={currentSection === sections.length - 1}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mt-2">
+            {section.name}
+          </h3>
+          {section.description && (
+            <p className="text-gray-500">{section.description}</p>
+          )}
+        </div>
+        <div className="space-y-4">
+          {section.questions.map((question) => {
+            if (question.conditional) {
+              const { questionId, value } = question.conditional;
+              if (formData[questionId] !== value) return null;
+            }
+            return renderFormField(question);
+          })}
+        </div>
+      </>
+    );
+  };
+
+  // Render the form content.
   const renderFormContent = () => {
     if (submitted) {
       return (
@@ -415,35 +550,9 @@ export default function FormPage() {
         </div>
       );
     }
-
-    const groupedQuestions = loadedFormDefinition.questions.reduce(
-      (acc, question) => {
-        const header = question.header || 'Additional Information';
-        if (!acc[header]) acc[header] = [];
-        acc[header].push(question);
-        return acc;
-      },
-      {}
-    );
-
     return (
       <form onSubmit={handleSubmit} className="space-y-8">
-        {Object.entries(groupedQuestions).map(([header, questions]) => (
-          <div key={header} className="space-y-6">
-            <div className="border-b border-gray-200 pb-2">
-              <h3 className="text-lg font-semibold text-gray-900">{header}</h3>
-            </div>
-            <div className="space-y-4">
-              {questions.map((question) => {
-                if (question.conditional) {
-                  const { questionId, value } = question.conditional;
-                  if (formData[questionId] !== value) return null;
-                }
-                return renderFormField(question);
-              })}
-            </div>
-          </div>
-        ))}
+        {renderSection()}
         <div className="pt-4">
           <Button type="submit" disabled={submitting}>
             {submitting ? 'Submitting...' : 'Submit Form'}
@@ -455,7 +564,7 @@ export default function FormPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Searchable combobox for form selection using the array of form names */}
+      {/* Form selection combo box */}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -503,13 +612,79 @@ export default function FormPage() {
         </PopoverContent>
       </Popover>
 
+      {/* If a form is selected and loaded, show the form with version options */}
       {selectedForm && loadedFormDefinition && (
         <div className="relative border border-dashed border-gray-300 rounded-lg">
           <Card className="h-full">
             <CardHeader>
-              <CardTitle>{loadedFormDefinition.title}</CardTitle>
-              <div className="text-gray-500 mt-1">
-                {loadedFormDefinition.description}
+              <div className="flex flex-col gap-2">
+                <CardTitle>{loadedFormDefinition.form_name}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Version:</Label>
+                  {/* Editable version name input */}
+                  <Input
+                    value={selectedVersion}
+                    onChange={(e) => setSelectedVersion(e.target.value)}
+                    className="w-40"
+                  />
+                  {/* Clone version button: clears version name to allow for a new clone */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setIsCloning(true);
+                      setSelectedVersion('');
+                    }}
+                  >
+                    Clone Version
+                  </Button>
+                </div>
+                {/* If multiple versions are available, show a version selection combo box */}
+                {availableVersions.length > 1 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-40 justify-between">
+                        {selectedVersion || 'Select Version'}
+                        <ChevronsUpDown className="opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-40 p-0">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search version..."
+                          className="h-9"
+                        />
+                        <CommandList>
+                          <CommandEmpty>No version found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableVersions.map((version) => (
+                              <CommandItem
+                                key={version}
+                                value={version}
+                                onSelect={(val) => {
+                                  handleVersionSelect(val);
+                                }}
+                              >
+                                {version}
+                                <Check
+                                  className={cn(
+                                    'ml-auto',
+                                    selectedVersion === version
+                                      ? 'opacity-100'
+                                      : 'opacity-0'
+                                  )}
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                <div className="text-gray-500 text-sm">
+                  {loadedFormDefinition.version_name}
+                </div>
               </div>
             </CardHeader>
             <CardContent>{renderFormContent()}</CardContent>
