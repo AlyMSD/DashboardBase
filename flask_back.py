@@ -1,76 +1,114 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 from pymongo import MongoClient
 import gridfs
-from werkzeug.utils import secure_filename
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS
 
-# Configure MongoDB connection (adjust the URI as needed)
-client = MongoClient("mongodb://localhost:27017/")
-db = client["formDB"]
-forms_collection = db["forms"]       # This collection stores form definitions.
-responses_collection = db["responses"] # This collection stores user responses.
-
-# Set up GridFS for file storage
+# Connect to MongoDB.
+client = MongoClient("mongodb://localhost:27017")
+db = client.forms_db
+forms_collection = db.forms
+submissions_collection = db.submissions
 fs = gridfs.GridFS(db)
 
-@app.route("/api/form", methods=["GET"])
-def get_form():
-    """
-    GET /api/form?name=<formName>
-    Returns the form definition and any existing response.
-    """
+@app.route("/api/form", methods=["GET", "POST"])
+def form_endpoint():
     form_name = request.args.get("name")
     if not form_name:
-        return jsonify({"error": "Missing form name"}), 400
+        return jsonify({"error": "Form name is required"}), 400
 
-    # Retrieve the form definition from MongoDB.
-    form_definition = forms_collection.find_one({"name": form_name}, {"_id": 0})
-    # Retrieve any previously saved response.
-    response = responses_collection.find_one({"formName": form_name}, {"_id": 0})
-    return jsonify({"form": form_definition, "response": response}), 200
+    if request.method == "GET":
+        # Optional version parameter.
+        version = request.args.get("version")
+        if not version:
+            # If no version is specified, try to get one from the first matching document.
+            doc = forms_collection.find_one({"form_name": form_name})
+            if not doc:
+                return jsonify({"error": "Form not found"}), 404
+            version = doc.get("version_name", "default")
+        
+        # Find the form definition by form_name and version.
+        form_def = forms_collection.find_one({"form_name": form_name, "version_name": version})
+        if not form_def:
+            return jsonify({"error": "Form definition not found for the given version"}), 404
 
-@app.route("/api/form", methods=["POST"])
-def submit_form():
-    """
-    POST /api/form?name=<formName>
-    Processes form submission: saves text fields from request.form and files to MongoDB via GridFS.
-    """
-    form_name = request.args.get("name")
-    if not form_name:
-        return jsonify({"error": "Missing form name"}), 400
+        # Remove the ObjectId field (or convert it to string).
+        form_def["_id"] = str(form_def["_id"])
+        
+        # Get available versions for this form.
+        versions = forms_collection.distinct("version_name", {"form_name": form_name})
+        form_def["versions"] = versions
 
-    # Retrieve all form fields from the POST request.
-    form_data = request.form.to_dict()
+        # Look for a saved submission.
+        submission = submissions_collection.find_one({"form_name": form_name, "version_name": version})
+        if submission:
+            # For each section and question, set the answer from the saved submission if it exists.
+            for section in form_def.get("sections", []):
+                for question in section.get("questions", []):
+                    qid = question.get("id")
+                    if qid in submission.get("data", {}):
+                        question["answer"] = submission["data"][qid]
+                    else:
+                        # For file type questions, default to an empty array.
+                        question["answer"] = [] if question.get("type") == "file" else None
+        else:
+            # No submission exists, so ensure default values.
+            for section in form_def.get("sections", []):
+                for question in section.get("questions", []):
+                    question["answer"] = [] if question.get("type") == "file" else None
 
-    # Process file uploads.
-    file_fields = {}
-    for key in request.files:
-        files = request.files.getlist(key)
-        file_ids = []
-        for file in files:
-            if file:
-                filename = secure_filename(file.filename)
-                # Save the file into GridFS. The entire file is read and stored.
-                file_id = fs.put(file.read(), filename=filename, content_type=file.content_type)
-                # Convert ObjectId to string for easy reference.
-                file_ids.append(str(file_id))
-        file_fields[key] = file_ids
+        return jsonify(form_def)
 
-    # Merge file ID arrays into the form data.
-    for key, file_ids in file_fields.items():
-        form_data[key] = file_ids
+    # POST: Handle form submission.
+    if request.method == "POST":
+        # In POST, version_name should be part of the payload.
+        form_data = request.form.to_dict()
+        version_name = form_data.get("version_name")
+        if not version_name:
+            version_name = "default"
 
-    # Upsert the response in the MongoDB responses collection.
-    responses_collection.update_one(
-        {"formName": form_name},
-        {"$set": {"formName": form_name, "data": form_data}},
-        upsert=True
-    )
+        # For safety, get form_name again from query parameters.
+        form_name = request.args.get("name")
+        submission_data = {}
 
-    return jsonify({"message": "Form submitted successfully", "data": form_data}), 200
+        # Process text/other non-file fields.
+        for key, value in form_data.items():
+            if key != "version_name":
+                submission_data[key] = value
+
+        # Process file uploads.
+        for key in request.files:
+            file_list = request.files.getlist(key)
+            file_entries = []
+            for file in file_list:
+                # Read file content.
+                file_content = file.read()
+                # Store file in GridFS.
+                file_id = fs.put(file_content, filename=file.filename, content_type=file.content_type)
+                file_entries.append({"file_id": str(file_id), "filename": file.filename})
+            submission_data[key] = file_entries
+
+        # Prepare submission document.
+        submission_doc = {
+            "form_name": form_name,
+            "version_name": version_name,
+            "data": submission_data
+        }
+
+        # Upsert the submission document.
+        submissions_collection.update_one(
+            {"form_name": form_name, "version_name": version_name},
+            {"$set": submission_doc},
+            upsert=True
+        )
+
+        print("Received form submission:")
+        print("Form Name:", form_name)
+        print("Version:", version_name)
+        print("Data:", submission_data)
+
+        return jsonify({"status": "success", "version_name": version_name}), 200
 
 if __name__ == "__main__":
     app.run(debug=True)
