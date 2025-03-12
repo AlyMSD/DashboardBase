@@ -28,27 +28,36 @@ def allowed_file(filename):
 @app.route('/api/form', methods=['GET', 'POST'])
 def form_endpoint():
     if request.method == 'GET':
+        # ... (GET route code - remains the same) ...
         form_name = request.args.get('name')
         version = request.args.get('version')
 
         if not form_name:
             return jsonify({"error": "Form name is required"}), 400
 
-        query = {"form_name": form_name}
-        if version:
-            query["version_name"] = version
+        if version: # If specific version is requested, fetch that
+            query = {"form_name": form_name, "version_name": version}
+            form_definition = form_collection.find_one(query)
+        else: # If no version requested, fetch the *first* version
+            all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1).limit(1) # Sort and limit to 1
+            first_version_doc = next(all_versions_cursor, None) # Get the first document or None if no versions
 
-        form_definition = form_collection.find_one(query)
+            if first_version_doc:
+                query = {"form_name": form_name, "version_name": first_version_doc['version_name']} # Query for the first version
+                form_definition = form_collection.find_one(query)
+            else: # No versions exist for this form_name
+                form_definition = None # Indicate form not found
 
         if form_definition:
             form_definition['_id'] = str(form_definition['_id'])
-            # Fetch all versions for dropdown
-            all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1) # sort versions
+            # Fetch all versions for dropdown (still needed for dropdown population)
+            all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1)
             all_versions = [v['version_name'] for v in all_versions_cursor]
             form_definition['versions'] = all_versions # Include versions in response
             return jsonify(form_definition)
         else:
             return jsonify({"error": "Form not found"}), 404
+
 
     elif request.method == 'POST':
         form_name = request.args.get('name')
@@ -92,7 +101,28 @@ def form_endpoint():
             "submitted": action == 'submit'
         }
 
-        if new_version_name_input: # Cloning scenario
+
+        form_definition = form_collection.find_one({"form_name": form_name, "version_name": version_name})
+        if not form_definition:
+            return jsonify({"error": "Form definition not found"}), 404
+
+
+        # **REORDERED LOGIC: Rename Check BEFORE Clone Check**
+        if new_version_name_input and new_version_name_input.strip() != version_name: # **RENAME Scenario:** if new_version_name provided and *different* from current version_name, it's a RENAMING operation
+            proposed_new_version_name = new_version_name_input.strip()
+            existing_version_same_name = form_collection.find_one({"form_name": form_name, "version_name": proposed_new_version_name})
+            if existing_version_same_name:
+                return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
+
+            # Rename version
+            form_collection.update_one(
+                {"_id": form_definition["_id"]},
+                {"$set": {"version_name": proposed_new_version_name, "submitted": action == 'submit'}} # Update version_name and submitted
+            )
+            version_name = proposed_new_version_name # Update version_name to the NEW name for subsequent fetch
+
+
+        elif new_version_name_input: # **CLONING Scenario:** if new_version_name provided BUT it's the *same* as current version_name (or rename was not triggered above), it's a CLONING operation
             new_version_name = new_version_name_input.strip() # use input new version name
             if not new_version_name:
                 return jsonify({"error": "New version name is required for cloning"}), 400
@@ -111,44 +141,26 @@ def form_endpoint():
             form_to_clone['version_name'] = new_version_name # Use the NEW version name
             form_to_clone['submitted'] = False
             form_id = form_collection.insert_one(form_to_clone)
+            version_name = new_version_name # Update version_name to the NEW name for subsequent fetch
 
 
-        else: # Save or Submit existing version (or rename)
-            form_definition = form_collection.find_one({"form_name": form_name, "version_name": version_name})
-            if not form_definition:
-                return jsonify({"error": "Form definition not found"}), 404
+        else: # Just save/submit data, no rename, no clone
+            for section_index, section in enumerate(form_definition.get("sections", [])):
+                for question_index, question in enumerate(section.get("questions", [])):
+                    question_id = question.get("id")
+                    if question_id in form_data:
+                        form_definition["sections"][section_index]["questions"][question_index]["answer"] = form_data[question_id]
+                    if question_id in files_data:
+                         form_definition["sections"][section_index]["questions"][question_index]["answer"] = files_data[question_id]
 
-            # Check for version rename
-            if new_version_name_input and new_version_name_input.strip() != version_name: # if new_version_name provided and different
-                proposed_new_version_name = new_version_name_input.strip()
-                existing_version_same_name = form_collection.find_one({"form_name": form_name, "version_name": proposed_new_version_name})
-                if existing_version_same_name:
-                    return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
-
-                # Rename version
-                form_collection.update_one(
-                    {"_id": form_definition["_id"]},
-                    {"$set": {"version_name": proposed_new_version_name, "submitted": action == 'submit'}} # Update version_name and submitted
-                )
-
-
-            else: # Just save/submit data, no rename
-                for section_index, section in enumerate(form_definition.get("sections", [])):
-                    for question_index, question in enumerate(section.get("questions", [])):
-                        question_id = question.get("id")
-                        if question_id in form_data:
-                            form_definition["sections"][section_index]["questions"][question_index]["answer"] = form_data[question_id]
-                        if question_id in files_data:
-                             form_definition["sections"][section_index]["questions"][question_index]["answer"] = files_data[question_id]
-
-                form_collection.update_one(
-                    {"_id": form_definition["_id"]},
-                    {"$set": {"sections": form_definition["sections"], "submitted": action == 'submit'}} # Just update sections and submitted
-                )
+            form_collection.update_one(
+                {"_id": form_definition["_id"]},
+                {"$set": {"sections": form_definition["sections"], "submitted": action == 'submit'}} # Just update sections and submitted
+            )
 
 
         # After POST, always refetch the form definition to get updated version list for frontend dropdown
-        updated_form_definition = form_collection.find_one({"form_name": form_name, "version_name": new_version_name if new_version_name_input else version_name}) # get latest version
+        updated_form_definition = form_collection.find_one({"form_name": form_name, "version_name": version_name}) # get latest version
         updated_form_definition['_id'] = str(updated_form_definition['_id'])
         all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1)
         all_versions = [v['version_name'] for v in all_versions_cursor]
