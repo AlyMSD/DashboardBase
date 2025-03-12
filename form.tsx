@@ -173,60 +173,83 @@ export default function FormPage() {
 
   // Send form data (for both "save" and "submit" actions).
   const handleFormSend = async (action) => {
-  setSubmitting(true);
-  try {
-    if (
-      loadedFormDefinition &&
-      !isCloning &&
-      selectedVersion !== loadedFormDefinition.version_name
-    ) {
-      setIsCloning(true);
-      setClonedFromVersion(loadedFormDefinition.version_name);
-    }
+    setSubmitting(true);
+    try {
+      // If the user changed the version name manually (i.e. different from the loaded version)
+      // and cloning is not yet active, treat that as cloning.
+      if (
+        loadedFormDefinition &&
+        !isCloning &&
+        selectedVersion !== loadedFormDefinition.version_name
+      ) {
+        setIsCloning(true);
+        setClonedFromVersion(loadedFormDefinition.version_name);
+      }
 
-    if (isCloning && !selectedVersion) {
-      alert("Please enter a new version name.");
+      // For cloning, require that a new version name is provided.
+      if (isCloning && !selectedVersion) {
+        alert("Please enter a new version name.");
+        setSubmitting(false);
+        return;
+      }
+
+      const payload = new FormData();
+      // Append text fields.
+      Object.keys(formData).forEach((key) =>
+        payload.append(key, formData[key])
+      );
+      // Append file uploads.
+      Object.keys(fileUploads).forEach((key) => {
+        fileUploads[key].forEach((file) => payload.append(key, file));
+      });
+
+      // Handle version information correctly for both normal saves and cloning
+      if (isCloning) {
+        // When cloning, we need:
+        // 1. version_name - the source version we're cloning from
+        // 2. new_version_name - the new version name
+        payload.append('version_name', clonedFromVersion);
+        payload.append('new_version_name', selectedVersion);
+      } else {
+        // When just saving/submitting an existing version, just send the current version
+        payload.append('version_name', selectedVersion);
+      }
+      
+      payload.append('action', action);
+
+      const res = await fetch(
+        `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
+        {
+          method: 'POST',
+          body: payload,
+        }
+      );
+      
+      if (!res.ok) throw new Error('Error sending form');
+      const data = await res.json();
+      
+      // If successful and was cloning, update our state to reflect we're now working
+      // with the new version
+      if (isCloning && data.version_name) {
+        setIsCloning(false);
+        setClonedFromVersion('');
+        setSelectedVersion(data.version_name);
+      }
+      
+      setSubmitted(data.submitted || false);
+      
+      // Save to local storage using the current/new version
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY(selectedForm, data.version_name || selectedVersion),
+        JSON.stringify(formData)
+      );
+    } catch (err) {
+      console.error('Error sending form', err);
+      alert("There was an error saving the form. Please try again.");
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    const payload = new FormData();
-    Object.keys(formData).forEach((key) => payload.append(key, formData[key]));
-    Object.keys(fileUploads).forEach((key) => {
-      fileUploads[key].forEach((file) => payload.append(key, file));
-    });
-
-    // Correct payload construction for cloning
-    if (isCloning) {
-      payload.append('version_name', clonedFromVersion);  // Original version
-      payload.append('new_version_name', selectedVersion); // New version
-    } else {
-      payload.append('version_name', selectedVersion);
-    }
-    payload.append('action', action);
-
-    const res = await fetch(
-      `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
-      { method: 'POST', body: payload }
-    );
-    if (!res.ok) throw new Error('Error sending form');
-    const data = await res.json();
-
-    // Update selected version and refetch form definition
-    setSelectedVersion(data.version_name);
-    await fetchFormDefinition(selectedForm, data.version_name);
-
-    setSubmitted(true);
-    localStorage.setItem(
-      LOCAL_STORAGE_KEY(selectedForm, data.version_name),
-      JSON.stringify(formData)
-    );
-  } catch (err) {
-    console.error('Error sending form', err);
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   // Handler for submission.
   const handleSubmit = async (e) => {
@@ -667,14 +690,21 @@ export default function FormPage() {
                     value={selectedVersion}
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     className="w-40"
+                    placeholder={isCloning ? "Enter new version name" : ""}
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={handleCloneVersion}
+                    disabled={isCloning}
                   >
                     Clone Version
                   </Button>
+                  {isCloning && (
+                    <div className="text-sm text-blue-500">
+                      Cloning from: {clonedFromVersion}
+                    </div>
+                  )}
                 </div>
                 {availableVersions.length > 1 && (
                   <Popover>
@@ -714,7 +744,7 @@ export default function FormPage() {
                   </Popover>
                 )}
                 <div className="text-gray-500 text-sm">
-                  {loadedFormDefinition.version_name}
+                  {loadedFormDefinition.description || ""}
                 </div>
               </div>
             </CardHeader>
