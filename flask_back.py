@@ -1,107 +1,157 @@
-import base64
 from flask import Flask, request, jsonify
-from pymongo import MongoClient
+from flask_pymongo import PyMongo, ASCENDING
+from werkzeug.utils import secure_filename
+import os
+from datetime import datetime
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
+app.config["MONGO_URI"] = "mongodb://localhost:27017/formDB"
+mongo = PyMongo(app)
 
-# Connect to MongoDB.
-client = MongoClient("mongodb://localhost:27017")
-db = client.forms_db
-forms_collection = db.forms
+# Configure file upload settings
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-@app.route("/api/form", methods=["GET", "POST"])
-def form_endpoint():
-    form_name = request.args.get("name")
+# Ensure upload directory exists
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename, allowed_types):
+    """Check if the file type is allowed based on MIME types."""
+    # Map MIME types to file extensions
+    mime_to_ext = {
+        'application/pdf': ['pdf'],
+        'image/png': ['png'],
+        'image/jpeg': ['jpg', 'jpeg'],
+        'application/msword': ['doc'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx']
+    }
+    allowed_extensions = []
+    for mime in allowed_types:
+        allowed_extensions.extend(mime_to_ext.get(mime, []))
+    
+    if '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in allowed_extensions if allowed_extensions else True
+
+@app.route('/api/form', methods=['GET'])
+def get_form():
+    form_name = request.args.get('name')
+    version = request.args.get('version')
+
+    query = {'form_name': form_name}
+    if version:
+        query['version_name'] = version
+    else:
+        # Get the latest version by creation date
+        form = mongo.db.forms.find_one(query, sort=[('created_at', ASCENDING)])
+        if not form:
+            return jsonify({'error': 'Form not found'}), 404
+        form['_id'] = str(form['_id'])
+        return jsonify(form)
+
+    form = mongo.db.forms.find_one(query)
+    if form:
+        form['_id'] = str(form['_id'])
+        return jsonify(form)
+    else:
+        return jsonify({'error': 'Form not found'}), 404
+
+@app.route('/api/form', methods=['POST'])
+def save_form():
+    form_name = request.args.get('name')
     if not form_name:
-        return jsonify({"error": "Form name is required"}), 400
+        return jsonify({'error': 'Form name is required'}), 400
 
-    if request.method == "GET":
-        # If no version is provided, fetch all available versions and pick the first (sorted alphabetically).
-        version = request.args.get("version")
-        versions = forms_collection.distinct("version_name", {"form_name": form_name})
-        if not versions:
-            return jsonify({"error": "Form not found"}), 404
-        versions.sort()  # sort alphabetically (or use another sorting as needed)
-        if not version:
-            version = versions[0]
-        form_def = forms_collection.find_one({"form_name": form_name, "version_name": version})
-        if not form_def:
-            return jsonify({"error": "Form definition not found for version"}), 404
+    version_name = request.form.get('version_name')
+    new_version_name = request.form.get('new_version_name')
+    action = request.form.get('action', 'save')
+    is_cloning = new_version_name is not None and new_version_name.strip() != ''
 
-        form_def["_id"] = str(form_def["_id"])
-        form_def["versions"] = versions
-        return jsonify(form_def)
-
-    if request.method == "POST":
-        # Process the form submission (or save) payload.
-        # Required fields: version_name, action.
-        form_data = request.form.to_dict()
-        version_name = form_data.get("version_name")
-        if not version_name:
-            return jsonify({"error": "version_name is required in payload"}), 400
-
-        action = form_data.get("action", "save")  # "save" or "submit"
-        # Optionally, a new_version_name field can be provided to rename (or clone) the version.
-        new_version_name = form_data.get("new_version_name")
-        # Remove control fields from form_data.
-        for key in ["version_name", "action", "new_version_name"]:
-            form_data.pop(key, None)
-
-        # Process file uploads: for each key, store files as Base64 encoded strings.
-        file_data = {}
-        for key in request.files:
-            file_list = request.files.getlist(key)
-            file_entries = []
-            for file in file_list:
-                file_content = base64.b64encode(file.read()).decode("utf-8")
-                file_entries.append({
-                    "filename": file.filename,
-                    "content_type": file.content_type,
-                    "data": file_content
-                })
-            file_data[key] = file_entries
-
-        # Merge text and file answers.
-        answers = {**form_data, **file_data}
-
-        # Try to find an existing form document for the given form name and version.
-        form_doc = forms_collection.find_one({"form_name": form_name, "version_name": version_name})
+    # Handle version cloning
+    if is_cloning:
+        source_form = mongo.db.forms.find_one({
+            'form_name': form_name,
+            'version_name': version_name
+        })
+        if not source_form:
+            return jsonify({'error': 'Source form not found'}), 404
+        form_doc = source_form.copy()
+        form_doc.pop('_id', None)
+        form_doc['version_name'] = new_version_name
+        form_doc['submitted'] = False
+        form_doc['created_at'] = datetime.utcnow()
+        version_name = new_version_name
+    else:
+        form_doc = mongo.db.forms.find_one({
+            'form_name': form_name,
+            'version_name': version_name
+        })
         if not form_doc:
-            return jsonify({"error": "Form definition not found for version"}), 404
+            form_doc = {
+                'form_name': form_name,
+                'version_name': version_name,
+                'submitted': False,
+                'sections': [],
+                'created_at': datetime.utcnow()
+            }
+        else:
+            form_doc = form_doc.copy()
 
-        # If new_version_name is provided, rename (or clone) the document:
-        if new_version_name:
-            # Check that there is no existing document with the new version name.
-            existing = forms_collection.find_one({"form_name": form_name, "version_name": new_version_name})
-            if existing:
-                return jsonify({"error": "A form with the new version name already exists"}), 400
-            # Clone the document with the new version name.
-            form_doc["version_name"] = new_version_name
-            version_name = new_version_name
+    # Update answers and handle files
+    for section in form_doc.get('sections', []):
+        for question in section.get('questions', []):
+            qid = question['id']
+            qtype = question.get('type')
 
-        # Update answers for each question in every section.
-        for section in form_doc.get("sections", []):
-            for question in section.get("questions", []):
-                qid = question.get("id")
-                if qid in answers:
-                    question["answer"] = answers[qid]
-        # Set the submitted flag based on the action.
-        form_doc["submitted"] = True if action == "submit" else False
+            if qtype == 'file':
+                # Existing files (split comma-separated strings)
+                existing_files = []
+                for f_str in request.form.getlist(qid):
+                    existing_files.extend(f_str.split(','))
+                existing_files = [f.strip() for f in existing_files if f.strip()]
 
-        # Update the form document in MongoDB.
-        forms_collection.update_one(
-            {"form_name": form_name, "version_name": version_name},
-            {"$set": form_doc},
+                # Process new uploads
+                new_files = request.files.getlist(qid)
+                saved_files = []
+                for file in new_files:
+                    if file and file.filename:
+                        filename = secure_filename(file.filename)
+                        allowed_types = question.get('allowedTypes', [])
+                        if not allowed_file(filename, allowed_types):
+                            continue
+                        # Generate unique filename
+                        unique = f"{datetime.utcnow().timestamp()}_{filename}"
+                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique))
+                        saved_files.append(unique)
+                # Combine existing and new files
+                question['answer'] = existing_files + saved_files
+            elif qtype == 'checkbox':
+                question['answer'] = request.form.getlist(qid)
+            else:
+                question['answer'] = request.form.get(qid, '')
+
+    # Update submission status
+    form_doc['submitted'] = action == 'submit'
+
+    # Save to database
+    if is_cloning:
+        mongo.db.forms.insert_one(form_doc)
+    else:
+        mongo.db.forms.update_one(
+            {'form_name': form_name, 'version_name': version_name},
+            {'$set': form_doc},
             upsert=True
         )
 
-        print("Received form update:")
-        print("Form Name:", form_name)
-        print("Version:", version_name)
-        print("Action:", action)
-        print("Answers:", answers)
+    return jsonify({
+        'message': 'Form saved successfully',
+        'version_name': version_name,
+        'submitted': form_doc['submitted']
+    })
 
-        return jsonify({"status": "success", "version_name": version_name, "submitted": form_doc["submitted"]}), 200
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
