@@ -49,6 +49,7 @@
   // Cloning states.
   const [isCloning, setIsCloning] = useState(false);
   const [clonedFromVersion, setClonedFromVersion] = useState('');
+  const [versionNameError, setVersionNameError] = useState(''); // State for version name error
 
   // Local storage key for selected version and submission data
   const LOCAL_STORAGE_VERSION_KEY = (formName) => `selected_version_${formName}`;
@@ -199,6 +200,7 @@
   // Send form data (for both "save" and "submit" actions).
   const handleFormSend = async (action) => {
    setSubmitting(true);
+   setVersionNameError(''); // Clear any previous version name errors
    try {
     // If the user changed the version name manually (i.e. different from the loaded version)
     // and cloning is not yet active, treat that as cloning.
@@ -228,12 +230,12 @@
      fileUploads[key].forEach((file) => payload.append(key, file));
     });
 
-    // Handle version parameters based on cloning state
-    if (isCloning) {
-     payload.append('version_name', clonedFromVersion);
-     payload.append('new_version_name', selectedVersion);
+    // Handle version parameters based on cloning/rename state
+    if (isCloning || (loadedFormDefinition && selectedVersion !== loadedFormDefinition.version_name)) { // If cloning OR renaming
+     payload.append('version_name', clonedFromVersion || loadedFormDefinition.version_name); // Original version name for cloning source or rename source
+     payload.append('new_version_name', selectedVersion); // New version name from input
     } else {
-     payload.append('version_name', selectedVersion);
+     payload.append('version_name', selectedVersion); // Current version name for save/submit without rename/clone
     }
     payload.append('action', action);
 
@@ -244,7 +246,17 @@
       body: payload,
      }
     );
-    if (!res.ok) throw new Error('Error sending form');
+
+    if (!res.ok) {
+     if (res.status === 409) { // Version name conflict error
+      const errorData = await res.json();
+      setVersionNameError(errorData.error || "Version name already exists.");
+      return; // Stop submission if version name error
+     }
+     throw new Error('Error sending form'); // General error for other non-OK responses
+    }
+
+
     const data = await res.json();
     setSubmitted(true);
     localStorage.setItem(
@@ -252,8 +264,15 @@
      JSON.stringify(formData)
     );
 
-    // Re-fetch form definition to update version list after clone/save/submit
-    await fetchFormDefinition(selectedForm);
+    // Re-fetch form definition to update version list after clone/save/submit/rename
+    setLoadedFormDefinition(data); // Update loaded form definition with response data (includes versions)
+    if (data.versions && Array.isArray(data.versions)) { // Update available versions
+     setAvailableVersions(data.versions);
+    } else {
+     setAvailableVersions([data.version_name]);
+    }
+    setSelectedVersion(data.version_name); // Update selectedVersion to the *new* version name after rename/clone/create
+    localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), data.version_name); // Store the new version in local storage
 
 
    } catch (err) {
@@ -424,7 +443,7 @@
        <div>
         {question.label}
         {question.required && <span className="text-red-500">*</span>}
-       </div>
+       </Label>
        <RadioGroup
         value={formData[question.id] || ''}
         onValueChange={(value) => handleInputChange(question.id, value)}
@@ -695,7 +714,7 @@
          <CardTitle>{loadedFormDefinition.form_name}</CardTitle>
          <div className="flex items-center gap-2">
           <Label className="text-sm">Version:</Label>
-          {/* Editable version input - MODIFIED onChange */}
+          {/* Editable version input - MODIFIED onChange and error display */}
           <Input
            value={selectedVersion}
            onChange={(e) => {
@@ -703,12 +722,13 @@
             setSelectedVersion(newVersion);
             localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), newVersion); // Store version on input change
             if (loadedFormDefinition && newVersion !== loadedFormDefinition.version_name) {
-             setIsCloning(true); // Set isCloning to true *immediately* on version change
-             setClonedFromVersion(loadedFormDefinition.version_name); // Set clonedFromVersion
+             setIsCloning(true);
+             setClonedFromVersion(loadedFormDefinition.version_name);
             } else {
-             setIsCloning(false); // If version name is same as loaded, reset cloning state
+             setIsCloning(false);
              setClonedFromVersion('');
             }
+            setVersionNameError(''); // Clear version name error on input change
            }}
            className="w-40"
           />
@@ -720,6 +740,9 @@
            Clone Version
           </Button>
          </div>
+         {versionNameError && ( // Display version name error message
+          <p className="text-red-500 text-sm">{versionNameError}</p>
+         )}
          {availableVersions.length > 1 && (
           <Popover>
            <PopoverTrigger asChild>
