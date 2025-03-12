@@ -173,65 +173,60 @@ export default function FormPage() {
 
   // Send form data (for both "save" and "submit" actions).
   const handleFormSend = async (action) => {
-    setSubmitting(true);
-    try {
-      // If the user changed the version name manually (i.e. different from the loaded version)
-      // and cloning is not yet active, treat that as cloning.
-      if (
-        loadedFormDefinition &&
-        !isCloning &&
-        selectedVersion !== loadedFormDefinition.version_name
-      ) {
-        setIsCloning(true);
-        setClonedFromVersion(loadedFormDefinition.version_name);
-      }
-
-      // For cloning, require that a new version name is provided.
-      if (isCloning && !selectedVersion) {
-        alert("Please enter a new version name.");
-        setSubmitting(false);
-        return;
-      }
-
-      const payload = new FormData();
-      // Append text fields.
-      Object.keys(formData).forEach((key) =>
-        payload.append(key, formData[key])
-      );
-      // Append file uploads.
-      Object.keys(fileUploads).forEach((key) => {
-        fileUploads[key].forEach((file) => payload.append(key, file));
-      });
-      // If cloning, include new_version_name and source_version;
-      // otherwise, just include version_name.
-      if (isCloning) {
-        payload.append('new_version_name', selectedVersion);
-        payload.append('source_version', clonedFromVersion);
-      } else {
-        payload.append('version_name', selectedVersion);
-      }
-      payload.append('action', action);
-
-      const res = await fetch(
-        `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
-        {
-          method: 'POST',
-          body: payload,
-        }
-      );
-      if (!res.ok) throw new Error('Error sending form');
-      const data = await res.json();
-      setSubmitted(true);
-      localStorage.setItem(
-        LOCAL_STORAGE_KEY(selectedForm, selectedVersion),
-        JSON.stringify(formData)
-      );
-    } catch (err) {
-      console.error('Error sending form', err);
-    } finally {
-      setSubmitting(false);
+  setSubmitting(true);
+  try {
+    if (
+      loadedFormDefinition &&
+      !isCloning &&
+      selectedVersion !== loadedFormDefinition.version_name
+    ) {
+      setIsCloning(true);
+      setClonedFromVersion(loadedFormDefinition.version_name);
     }
-  };
+
+    if (isCloning && !selectedVersion) {
+      alert("Please enter a new version name.");
+      setSubmitting(false);
+      return;
+    }
+
+    const payload = new FormData();
+    Object.keys(formData).forEach((key) => payload.append(key, formData[key]));
+    Object.keys(fileUploads).forEach((key) => {
+      fileUploads[key].forEach((file) => payload.append(key, file));
+    });
+
+    // Correct payload construction for cloning
+    if (isCloning) {
+      payload.append('version_name', clonedFromVersion);  // Original version
+      payload.append('new_version_name', selectedVersion); // New version
+    } else {
+      payload.append('version_name', selectedVersion);
+    }
+    payload.append('action', action);
+
+    const res = await fetch(
+      `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
+      { method: 'POST', body: payload }
+    );
+    if (!res.ok) throw new Error('Error sending form');
+    const data = await res.json();
+
+    // Update selected version and refetch form definition
+    setSelectedVersion(data.version_name);
+    await fetchFormDefinition(selectedForm, data.version_name);
+
+    setSubmitted(true);
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY(selectedForm, data.version_name),
+      JSON.stringify(formData)
+    );
+  } catch (err) {
+    console.error('Error sending form', err);
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   // Handler for submission.
   const handleSubmit = async (e) => {
