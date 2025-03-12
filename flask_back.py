@@ -16,41 +16,38 @@ def form_endpoint():
         return jsonify({"error": "Form name is required"}), 400
 
     if request.method == "GET":
-        # Optional version parameter.
+        # If no version is provided, fetch all available versions and pick the first (sorted alphabetically).
         version = request.args.get("version")
+        versions = forms_collection.distinct("version_name", {"form_name": form_name})
+        if not versions:
+            return jsonify({"error": "Form not found"}), 404
+        versions.sort()  # sort alphabetically (or use another sorting as needed)
         if not version:
-            # Retrieve the first version available for this form.
-            doc = forms_collection.find_one({"form_name": form_name})
-            if not doc:
-                return jsonify({"error": "Form not found"}), 404
-            version = doc.get("version_name", "default")
-        
-        # Retrieve the form definition for the given form name and version.
+            version = versions[0]
         form_def = forms_collection.find_one({"form_name": form_name, "version_name": version})
         if not form_def:
-            return jsonify({"error": "Form definition not found for the given version"}), 404
+            return jsonify({"error": "Form definition not found for version"}), 404
 
-        # Convert ObjectId to string for JSON serialization.
         form_def["_id"] = str(form_def["_id"])
-
-        # Retrieve available versions for this form.
-        versions = forms_collection.distinct("version_name", {"form_name": form_name})
-        # If the query returns an empty array, fall back to the current version.
-        if not versions:
-            versions = [form_def.get("version_name", "default")]
         form_def["versions"] = versions
-
         return jsonify(form_def)
 
     if request.method == "POST":
-        # Process form submission/cloning.
+        # Process the form submission (or save) payload.
+        # Required fields: version_name, action.
         form_data = request.form.to_dict()
-        version_name = form_data.get("version_name", "default")
-        source_version = form_data.get("source_version")
-        form_data.pop("version_name", None)
-        form_data.pop("source_version", None)
+        version_name = form_data.get("version_name")
+        if not version_name:
+            return jsonify({"error": "version_name is required in payload"}), 400
 
-        # Process file uploads (store each file as a Base64 encoded string).
+        action = form_data.get("action", "save")  # "save" or "submit"
+        # Optionally, a new_version_name field can be provided to rename (or clone) the version.
+        new_version_name = form_data.get("new_version_name")
+        # Remove control fields from form_data.
+        for key in ["version_name", "action", "new_version_name"]:
+            form_data.pop(key, None)
+
+        # Process file uploads: for each key, store files as Base64 encoded strings.
         file_data = {}
         for key in request.files:
             file_list = request.files.getlist(key)
@@ -64,91 +61,47 @@ def form_endpoint():
                 })
             file_data[key] = file_entries
 
+        # Merge text and file answers.
         answers = {**form_data, **file_data}
 
+        # Try to find an existing form document for the given form name and version.
         form_doc = forms_collection.find_one({"form_name": form_name, "version_name": version_name})
         if not form_doc:
-            if source_version:
-                source_doc = forms_collection.find_one({"form_name": form_name, "version_name": source_version})
-                if source_doc:
-                    source_doc.pop("_id", None)
-                    source_doc["version_name"] = version_name
-                    form_doc = source_doc
-                else:
-                    form_doc = {
-                        "form_name": form_name,
-                        "version_name": version_name,
-                        "submitted": False,
-                        "sections": [
-                            {
-                                "name": "Name Section",
-                                "description": "An area for the user to add their name",
-                                "questions": [
-                                    {
-                                        "id": "name",
-                                        "type": "text",
-                                        "label": "Your Name",
-                                        "placeholder": "Enter your full name",
-                                        "answer": None,
-                                        "required": True
-                                    },
-                                    {
-                                        "id": "resume",
-                                        "type": "file",
-                                        "label": "Upload Resume",
-                                        "allowedTypes": ["application/pdf", "application/msword"],
-                                        "answer": [],
-                                        "required": False
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-            else:
-                form_doc = {
-                    "form_name": form_name,
-                    "version_name": version_name,
-                    "submitted": False,
-                    "sections": [
-                        {
-                            "name": "Name Section",
-                            "description": "An area for the user to add their name",
-                            "questions": [
-                                {
-                                    "id": "name",
-                                    "type": "text",
-                                    "label": "Your Name",
-                                    "placeholder": "Enter your full name",
-                                    "answer": None,
-                                    "required": True
-                                },
-                                {
-                                    "id": "resume",
-                                    "type": "file",
-                                    "label": "Upload Resume",
-                                    "allowedTypes": ["application/pdf", "application/msword"],
-                                    "answer": [],
-                                    "required": False
-                                }
-                            ]
-                        }
-                    ]
-                }
+            return jsonify({"error": "Form definition not found for version"}), 404
 
+        # If new_version_name is provided, rename (or clone) the document:
+        if new_version_name:
+            # Check that there is no existing document with the new version name.
+            existing = forms_collection.find_one({"form_name": form_name, "version_name": new_version_name})
+            if existing:
+                return jsonify({"error": "A form with the new version name already exists"}), 400
+            # Clone the document with the new version name.
+            form_doc["version_name"] = new_version_name
+            version_name = new_version_name
+
+        # Update answers for each question in every section.
         for section in form_doc.get("sections", []):
             for question in section.get("questions", []):
                 qid = question.get("id")
                 if qid in answers:
                     question["answer"] = answers[qid]
-        form_doc["submitted"] = True
+        # Set the submitted flag based on the action.
+        form_doc["submitted"] = True if action == "submit" else False
 
+        # Update the form document in MongoDB.
         forms_collection.update_one(
             {"form_name": form_name, "version_name": version_name},
             {"$set": form_doc},
             upsert=True
         )
 
-        return jsonify({"status": "success", "version_name": version_name}), 200
+        print("Received form update:")
+        print("Form Name:", form_name)
+        print("Version:", version_name)
+        print("Action:", action)
+        print("Answers:", answers)
+
+        return jsonify({"status": "success", "version_name": version_name, "submitted": form_doc["submitted"]}), 200
 
 if __name__ == "__main__":
     app.run(debug=True)
