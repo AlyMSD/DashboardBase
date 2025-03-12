@@ -210,9 +210,8 @@
    setSubmitting(true);
    setVersionNameError(''); // Clear any previous version name errors
    try {
-    // If the user changed the version name manually AND cloning is NOT active, treat that as rename.
-    const isRenaming = loadedFormDefinition && selectedVersion !== loadedFormDefinition.version_name && !isCloning;
-
+    // Determine if it's a rename of the *current* version
+    const isRenamingCurrentVersion = loadedFormDefinition && selectedVersion !== loadedFormDefinition.version_name && !isCloning;
 
     // For cloning, require that a new version name is provided.
     if (isCloning && !selectedVersion) {
@@ -231,16 +230,16 @@
      fileUploads[key].forEach((file) => payload.append(key, file));
     });
 
-    // Handle version parameters based on cloning, rename, or regular save/submit
-    if (isCloning) { // CLONING
-     payload.append('version_name', clonedFromVersion || loadedFormDefinition.version_name); // Original version name for cloning source
-     payload.append('new_version_name', selectedVersion); // New version name from input
-    } else if (isRenaming) { // RENAMING
-     payload.append('version_name', loadedFormDefinition.version_name); // Original version name (for backend to find and rename)
-     payload.append('new_version_name', selectedVersion); // NEW version name from input
+    // Handle version parameters based on cloning, rename current, or regular save/submit
+    if (isCloning) { // CLONING: create a new version from a source version
+     payload.append('version_name', clonedFromVersion || loadedFormDefinition.version_name); // Original version name (source for clone)
+     payload.append('new_version_name', selectedVersion); // New version name (for the *new* cloned version)
+    } else if (isRenamingCurrentVersion) { // RENAMING CURRENT VERSION: update the version name of the *existing* version
+     payload.append('version_name', loadedFormDefinition.version_name); // *Original* version name (to identify the version to rename)
+     payload.append('new_version_name', selectedVersion); // *New* version name (the new name to set)
     }
-    else { // SAVE/SUBMIT (no clone, no rename)
-     payload.append('version_name', selectedVersion); // Current version name for save/submit without rename/clone
+    else { // SAVE/SUBMIT (no clone, no rename): simply save changes to the *current* version
+     payload.append('version_name', selectedVersion); // Current version name (for save/submit to existing version)
     }
     payload.append('action', action);
 
@@ -731,13 +730,8 @@
             const newVersion = e.target.value;
             setSelectedVersion(newVersion);
             localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), newVersion); // Store version on input change
-            if (loadedFormDefinition && newVersion !== loadedFormDefinition.version_name) {
-             setIsCloning(true); // Keep this for potential future logic if needed when typing a new version name directly
-             setClonedFromVersion(loadedFormDefinition.version_name); // Keep this too
-            } else {
-             setIsCloning(false);
-             setClonedFromVersion('');
-            }
+             setIsCloning(false); // **Ensure isCloning is set to false when typing directly**
+             setClonedFromVersion(''); // Clear clonedFromVersion as it's not a clone operation
             setVersionNameError(''); // Clear version name error on input change
            }}
            className="w-40"
