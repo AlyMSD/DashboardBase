@@ -16,14 +16,14 @@ def form_endpoint():
         return jsonify({"error": "Form name is required"}), 400
 
     if request.method == "GET":
-        # Retrieve all available versions for this form.
-        versions = forms_collection.distinct("version_name", {"form_name": form_name})
-        if not versions:
-            return jsonify({"error": "Form not found"}), 404
-
-        # Sort versions (alphabetically in this example) and select the first version.
-        versions.sort()
-        version = request.args.get("version", versions[0])
+        # Optional version parameter.
+        version = request.args.get("version")
+        if not version:
+            # Retrieve the first version available for this form.
+            doc = forms_collection.find_one({"form_name": form_name})
+            if not doc:
+                return jsonify({"error": "Form not found"}), 404
+            version = doc.get("version_name", "default")
         
         # Retrieve the form definition for the given form name and version.
         form_def = forms_collection.find_one({"form_name": form_name, "version_name": version})
@@ -32,11 +32,18 @@ def form_endpoint():
 
         # Convert ObjectId to string for JSON serialization.
         form_def["_id"] = str(form_def["_id"])
+
+        # Retrieve available versions for this form.
+        versions = forms_collection.distinct("version_name", {"form_name": form_name})
+        # If the query returns an empty array, fall back to the current version.
+        if not versions:
+            versions = [form_def.get("version_name", "default")]
         form_def["versions"] = versions
+
         return jsonify(form_def)
 
     if request.method == "POST":
-        # Expect a POST payload with answers for each question.
+        # Process form submission/cloning.
         form_data = request.form.to_dict()
         version_name = form_data.get("version_name", "default")
         source_version = form_data.get("source_version")
@@ -59,11 +66,9 @@ def form_endpoint():
 
         answers = {**form_data, **file_data}
 
-        # Find an existing form document for the given form name and version.
         form_doc = forms_collection.find_one({"form_name": form_name, "version_name": version_name})
         if not form_doc:
             if source_version:
-                # Clone from the source version.
                 source_doc = forms_collection.find_one({"form_name": form_name, "version_name": source_version})
                 if source_doc:
                     source_doc.pop("_id", None)
@@ -142,13 +147,6 @@ def form_endpoint():
             {"$set": form_doc},
             upsert=True
         )
-
-        print("Received form submission:")
-        print("Form Name:", form_name)
-        print("New Version:", version_name)
-        if source_version:
-            print("Cloned From Version:", source_version)
-        print("Answers:", answers)
 
         return jsonify({"status": "success", "version_name": version_name}), 200
 
