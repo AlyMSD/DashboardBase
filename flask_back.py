@@ -7,8 +7,8 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 CORS(app)
 
-# MongoDB Configuration
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/') # default localhost if env variable not set
+# MongoDB Configuration (same as before)
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
 DATABASE_NAME = os.environ.get('DATABASE_NAME', 'form_database')
 FORM_COLLECTION_NAME = os.environ.get('FORM_COLLECTION_NAME', 'forms')
 
@@ -16,11 +16,10 @@ client = MongoClient(MONGO_URI)
 db = client[DATABASE_NAME]
 form_collection = db[FORM_COLLECTION_NAME]
 
-UPLOAD_FOLDER = 'uploads' # Directory to save uploaded files
-ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx'} # Example allowed extensions
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True) # Ensure upload folder exists
-
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -42,8 +41,11 @@ def form_endpoint():
         form_definition = form_collection.find_one(query)
 
         if form_definition:
-            # Convert ObjectId to string for JSON serialization
             form_definition['_id'] = str(form_definition['_id'])
+            # Fetch all versions for dropdown
+            all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1) # sort versions
+            all_versions = [v['version_name'] for v in all_versions_cursor]
+            form_definition['versions'] = all_versions # Include versions in response
             return jsonify(form_definition)
         else:
             return jsonify({"error": "Form not found"}), 404
@@ -54,8 +56,8 @@ def form_endpoint():
             return jsonify({"error": "Form name is required"}), 400
 
         action = request.form.get('action') # 'save' or 'submit'
-        version_name = request.form.get('version_name')
-        new_version_name = request.form.get('new_version_name') # for cloning
+        version_name = request.form.get('version_name') # current version name (might be old name if renaming)
+        new_version_name_input = request.form.get('new_version_name') # for cloning, and rename input
 
         if not version_name:
             return jsonify({"error": "Version name is required"}), 400
@@ -74,12 +76,12 @@ def form_endpoint():
                 if file and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(file_path) # Save file to disk - in real scenario consider cloud storage
-                    file_list.append(filename) # Store just filename, or full path depending on needs
+                    file.save(file_path)
+                    file_list.append(filename)
                 else:
                     return jsonify({"error": f"Invalid file type for {file.filename}"}), 400
             if file_list:
-                files_data[key] = file_list # Store list of filenames for file question IDs
+                files_data[key] = file_list
 
         submission_data = {
             "form_name": form_name,
@@ -87,51 +89,74 @@ def form_endpoint():
             "action": action,
             "form_data": form_data,
             "files_data": files_data,
-            "submitted": action == 'submit' # Indicate if it's a final submission
+            "submitted": action == 'submit'
         }
 
-        if new_version_name: # Cloning scenario
-            # Find the form to clone
+        if new_version_name_input: # Cloning scenario
+            new_version_name = new_version_name_input.strip() # use input new version name
+            if not new_version_name:
+                return jsonify({"error": "New version name is required for cloning"}), 400
+
+            # Check if version name already exists for this form
+            existing_version = form_collection.find_one({"form_name": form_name, "version_name": new_version_name})
+            if existing_version:
+                return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
+
+
             form_to_clone = form_collection.find_one({"form_name": form_name, "version_name": version_name})
             if not form_to_clone:
                 return jsonify({"error": "Version to clone not found"}), 404
 
-            # Create a new version based on the cloned form
-            del form_to_clone['_id'] # Remove ObjectId for new insertion
-            form_to_clone['version_name'] = new_version_name
-            form_to_clone['submitted'] = False # New version is not submitted
-            form_id = form_collection.insert_one(form_to_clone) # Insert the cloned form as new version
+            del form_to_clone['_id']
+            form_to_clone['version_name'] = new_version_name # Use the NEW version name
+            form_to_clone['submitted'] = False
+            form_id = form_collection.insert_one(form_to_clone)
 
-        else: # Save or Submit existing version
-            # In a real app, you might want to store submissions in a separate collection
-            # For simplicity, here we are updating the form definition document itself (not ideal for production)
-            # Consider creating a new collection for form submissions linked to form definitions
 
-            # Update the 'answer' field in the form definition with submitted data.
-            # This is a simplified approach. In a real-world scenario, you would likely:
-            # 1. Store submission data in a separate collection.
-            # 2. Not modify the form definition directly upon submission.
-
+        else: # Save or Submit existing version (or rename)
             form_definition = form_collection.find_one({"form_name": form_name, "version_name": version_name})
             if not form_definition:
                 return jsonify({"error": "Form definition not found"}), 404
 
-            for section_index, section in enumerate(form_definition.get("sections", [])):
-                for question_index, question in enumerate(section.get("questions", [])):
-                    question_id = question.get("id")
-                    if question_id in form_data:
-                        form_definition["sections"][section_index]["questions"][question_index]["answer"] = form_data[question_id]
-                    if question_id in files_data: # handling file uploads, storing filenames
-                         form_definition["sections"][section_index]["questions"][question_index]["answer"] = files_data[question_id]
+            # Check for version rename
+            if new_version_name_input and new_version_name_input.strip() != version_name: # if new_version_name provided and different
+                proposed_new_version_name = new_version_name_input.strip()
+                existing_version_same_name = form_collection.find_one({"form_name": form_name, "version_name": proposed_new_version_name})
+                if existing_version_same_name:
+                    return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
+
+                # Rename version
+                form_collection.update_one(
+                    {"_id": form_definition["_id"]},
+                    {"$set": {"version_name": proposed_new_version_name, "submitted": action == 'submit'}} # Update version_name and submitted
+                )
 
 
-            form_collection.update_one(
-                {"_id": form_definition["_id"]}, # assuming _id exists from the get call
-                {"$set": {"sections": form_definition["sections"], "submitted": action == 'submit'}}
-            )
+            else: # Just save/submit data, no rename
+                for section_index, section in enumerate(form_definition.get("sections", [])):
+                    for question_index, question in enumerate(section.get("questions", [])):
+                        question_id = question.get("id")
+                        if question_id in form_data:
+                            form_definition["sections"][section_index]["questions"][question_index]["answer"] = form_data[question_id]
+                        if question_id in files_data:
+                             form_definition["sections"][section_index]["questions"][question_index]["answer"] = files_data[question_id]
+
+                form_collection.update_one(
+                    {"_id": form_definition["_id"]},
+                    {"$set": {"sections": form_definition["sections"], "submitted": action == 'submit'}} # Just update sections and submitted
+                )
 
 
-        return jsonify({"message": "Form data processed successfully"}), 200
+        # After POST, always refetch the form definition to get updated version list for frontend dropdown
+        updated_form_definition = form_collection.find_one({"form_name": form_name, "version_name": new_version_name if new_version_name_input else version_name}) # get latest version
+        updated_form_definition['_id'] = str(updated_form_definition['_id'])
+        all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1)
+        all_versions = [v['version_name'] for v in all_versions_cursor]
+        updated_form_definition['versions'] = all_versions # Re-include versions
+        return jsonify(updated_form_definition) # Return updated form definition including versions
+
+
+    return jsonify({"error": "Invalid method"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
