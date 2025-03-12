@@ -39,12 +39,15 @@ def form_endpoint():
 
     if request.method == "POST":
         # Expect a POST payload with answers for each question.
-        # The answers should be stored in the questions' "answer" field.
+        # Answers will be stored within each question's "answer" key.
         form_data = request.form.to_dict()
+        # version_name is the new (or updated) version.
         version_name = form_data.get("version_name", "default")
-        # Remove version_name from answers.
-        if "version_name" in form_data:
-            del form_data["version_name"]
+        # Optionally, when cloning a form, the frontend sends "source_version".
+        source_version = form_data.get("source_version")
+        # Remove these keys from form_data.
+        form_data.pop("version_name", None)
+        form_data.pop("source_version", None)
 
         # Process file uploads (store each file as a Base64 encoded string).
         file_data = {}
@@ -63,56 +66,90 @@ def form_endpoint():
         # Merge non-file answers and file answers.
         answers = {**form_data, **file_data}
 
-        # Try to find an existing form definition for the given form name and version.
+        # Try to find an existing form document for the given form name and version.
         form_doc = forms_collection.find_one({"form_name": form_name, "version_name": version_name})
         if not form_doc:
-            # If the document does not exist, assume this is a new (or cloned) version.
-            # Here we simulate a base form structure.
-            base_form = {
-                "form_name": form_name,
-                "version_name": version_name,
-                "submitted": False,
-                "sections": [
-                    {
-                        "name": "Name Section",
-                        "description": "An area for the user to add their name",
-                        "questions": [
+            # If the document does not exist, check if this is a clone.
+            if source_version:
+                # Clone from the source version.
+                source_doc = forms_collection.find_one({"form_name": form_name, "version_name": source_version})
+                if source_doc:
+                    source_doc.pop("_id", None)
+                    source_doc["version_name"] = version_name
+                    form_doc = source_doc
+                else:
+                    # Fallback to a base form structure if source not found.
+                    form_doc = {
+                        "form_name": form_name,
+                        "version_name": version_name,
+                        "submitted": False,
+                        "sections": [
                             {
-                                "id": "name",
-                                "type": "text",
-                                "label": "Your Name",
-                                "placeholder": "Enter your full name",
-                                "answer": None,
-                                "required": True
-                            },
-                            {
-                                "id": "resume",
-                                "type": "file",
-                                "label": "Upload Resume",
-                                "allowedTypes": ["application/pdf", "application/msword"],
-                                "answer": [],
-                                "required": False
+                                "name": "Name Section",
+                                "description": "An area for the user to add their name",
+                                "questions": [
+                                    {
+                                        "id": "name",
+                                        "type": "text",
+                                        "label": "Your Name",
+                                        "placeholder": "Enter your full name",
+                                        "answer": None,
+                                        "required": True
+                                    },
+                                    {
+                                        "id": "resume",
+                                        "type": "file",
+                                        "label": "Upload Resume",
+                                        "allowedTypes": ["application/pdf", "application/msword"],
+                                        "answer": [],
+                                        "required": False
+                                    }
+                                ]
                             }
                         ]
                     }
-                ]
-            }
-            form_doc = base_form
-            # Insert the new form document.
-            result = forms_collection.insert_one(form_doc)
-            form_doc["_id"] = result.inserted_id
+            else:
+                # If not cloning, use a base form structure.
+                form_doc = {
+                    "form_name": form_name,
+                    "version_name": version_name,
+                    "submitted": False,
+                    "sections": [
+                        {
+                            "name": "Name Section",
+                            "description": "An area for the user to add their name",
+                            "questions": [
+                                {
+                                    "id": "name",
+                                    "type": "text",
+                                    "label": "Your Name",
+                                    "placeholder": "Enter your full name",
+                                    "answer": None,
+                                    "required": True
+                                },
+                                {
+                                    "id": "resume",
+                                    "type": "file",
+                                    "label": "Upload Resume",
+                                    "allowedTypes": ["application/pdf", "application/msword"],
+                                    "answer": [],
+                                    "required": False
+                                }
+                            ]
+                        }
+                    ]
+                }
 
-        # Update the answers for each question.
-        # For each section and each question, if a value exists in the answers payload, update the "answer" field.
+        # Update the answers for each question in each section.
         for section in form_doc.get("sections", []):
             for question in section.get("questions", []):
                 qid = question.get("id")
                 if qid in answers:
                     question["answer"] = answers[qid]
-        # Mark as submitted (set to True, or leave as False if desired).
+        # Mark as submitted.
         form_doc["submitted"] = True
 
-        # Update (or insert) the form document in MongoDB.
+        # Upsert the document in MongoDB.
         forms_collection.update_one(
             {"form_name": form_name, "version_name": version_name},
             {"$set": form_doc},
@@ -121,7 +158,9 @@ def form_endpoint():
 
         print("Received form submission:")
         print("Form Name:", form_name)
-        print("Version:", version_name)
+        print("New Version:", version_name)
+        if source_version:
+            print("Cloned From Version:", source_version)
         print("Answers:", answers)
 
         return jsonify({"status": "success", "version_name": version_name}), 200
