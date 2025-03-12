@@ -46,15 +46,15 @@ export default function FormPage() {
   // Version states.
   const [selectedVersion, setSelectedVersion] = useState('');
   const [availableVersions, setAvailableVersions] = useState([]);
-  // Cloning state.
+  // Cloning states.
   const [isCloning, setIsCloning] = useState(false);
   const [clonedFromVersion, setClonedFromVersion] = useState('');
 
-  // Key for local storage.
+  // Local storage key (if needed)
   const LOCAL_STORAGE_KEY = (formName, version) =>
     `form_${formName}_v_${version}_submission`;
 
-  // Delete file from existing answer or new uploads.
+  // Delete file (existing or new uploads)
   const handleDeleteFile = (questionId, index, source) => {
     if (source === 'existing') {
       setFormData((prev) => {
@@ -88,7 +88,9 @@ export default function FormPage() {
         } else {
           setAvailableVersions([data.version_name]);
         }
+        // If not already cloning, set the selected version from backend.
         if (!isCloning) setSelectedVersion(data.version_name);
+        // Build initial formData from DB data.
         const initialFormData = {};
         data.sections.forEach((section) => {
           section.questions.forEach((question) => {
@@ -102,6 +104,7 @@ export default function FormPage() {
             }
           });
         });
+        // Optionally, load any saved submission from local storage.
         const savedSubmission = localStorage.getItem(
           LOCAL_STORAGE_KEY(formName, version || data.version_name)
         );
@@ -144,10 +147,12 @@ export default function FormPage() {
     await fetchFormDefinition(selectedForm, version);
   };
 
-  // When the user clicks "Clone Version", store the current version as the source and clear the version field.
+  // When the user clicks "Clone Version"
   const handleCloneVersion = () => {
+    // Save current version as source.
     setIsCloning(true);
     setClonedFromVersion(selectedVersion);
+    // Clear selectedVersion so the user can type a new one.
     setSelectedVersion('');
   };
 
@@ -156,7 +161,7 @@ export default function FormPage() {
     setFormData((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  // Append newly uploaded files.
+  // Append new uploaded files.
   const handleFileUpload = (questionId, files) => {
     if (files?.length) {
       setFileUploads((prev) => ({
@@ -166,26 +171,53 @@ export default function FormPage() {
     }
   };
 
-  // Common function to send form data.
+  // Send form data (for both "save" and "submit" actions).
   const handleFormSend = async (action) => {
     setSubmitting(true);
     try {
+      // If the user changed the version name manually (i.e. different from the loaded version)
+      // and cloning is not yet active, treat that as cloning.
+      if (
+        loadedFormDefinition &&
+        !isCloning &&
+        selectedVersion !== loadedFormDefinition.version_name
+      ) {
+        setIsCloning(true);
+        setClonedFromVersion(loadedFormDefinition.version_name);
+      }
+
+      // For cloning, require that a new version name is provided.
+      if (isCloning && !selectedVersion) {
+        alert("Please enter a new version name.");
+        setSubmitting(false);
+        return;
+      }
+
       const payload = new FormData();
+      // Append text fields.
       Object.keys(formData).forEach((key) =>
         payload.append(key, formData[key])
       );
+      // Append file uploads.
       Object.keys(fileUploads).forEach((key) => {
         fileUploads[key].forEach((file) => payload.append(key, file));
       });
-      payload.append('version_name', selectedVersion);
-      payload.append('action', action);
+      // If cloning, include new_version_name and source_version;
+      // otherwise, just include version_name.
       if (isCloning) {
         payload.append('new_version_name', selectedVersion);
         payload.append('source_version', clonedFromVersion);
+      } else {
+        payload.append('version_name', selectedVersion);
       }
+      payload.append('action', action);
+
       const res = await fetch(
         `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
-        { method: 'POST', body: payload }
+        {
+          method: 'POST',
+          body: payload,
+        }
       );
       if (!res.ok) throw new Error('Error sending form');
       const data = await res.json();
@@ -201,7 +233,7 @@ export default function FormPage() {
     }
   };
 
-  // Handler for form submission.
+  // Handler for submission.
   const handleSubmit = async (e) => {
     e.preventDefault();
     await handleFormSend('submit');
@@ -212,7 +244,7 @@ export default function FormPage() {
     await handleFormSend('save');
   };
 
-  // Render a field based on its type.
+  // Render a field based on type.
   const renderFormField = (question) => {
     switch (question.type) {
       case 'text':
@@ -341,7 +373,10 @@ export default function FormPage() {
                           placeholder="Please specify"
                           value={formData[`${question.id}_other`] || ''}
                           onChange={(e) =>
-                            handleInputChange(`${question.id}_other`, e.target.value)
+                            handleInputChange(
+                              `${question.id}_other`,
+                              e.target.value
+                            )
                           }
                           required={question.required}
                         />
@@ -478,7 +513,7 @@ export default function FormPage() {
     }
   };
 
-  // Render the current section with a page tracker and conditional question logic.
+  // Render current section with page tracker and conditional rendering.
   const renderSection = () => {
     if (!loadedFormDefinition) return null;
     const sections = loadedFormDefinition.sections;
@@ -518,8 +553,7 @@ export default function FormPage() {
         </div>
         <div className="space-y-4">
           {section.questions.map((question) => {
-            // Conditional rendering: if the question has a conditional property,
-            // check whether the answer for the referenced question meets the condition.
+            // Handle conditional rendering.
             if (question.conditional) {
               const { questionId, value } = question.conditional;
               const currentAnswer = formData[questionId];
@@ -536,7 +570,7 @@ export default function FormPage() {
     );
   };
 
-  // Render the form content.
+  // Render form content.
   const renderFormContent = () => {
     if (submitted) {
       return (
@@ -624,7 +658,7 @@ export default function FormPage() {
         </PopoverContent>
       </Popover>
 
-      {/* If a form is selected and loaded, show the form with version options */}
+      {/* Render form if selected and loaded */}
       {selectedForm && loadedFormDefinition && (
         <div className="relative border border-dashed border-gray-300 rounded-lg">
           <Card className="h-full">
@@ -639,7 +673,6 @@ export default function FormPage() {
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     className="w-40"
                   />
-                  {/* Clone version button */}
                   <Button
                     size="sm"
                     variant="outline"
