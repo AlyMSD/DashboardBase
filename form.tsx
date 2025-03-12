@@ -43,18 +43,17 @@ export default function FormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [currentSection, setCurrentSection] = useState(0);
 
-  // Version states: selectedVersion is used both for editing and for selecting an existing version.
+  // Version states.
   const [selectedVersion, setSelectedVersion] = useState('');
   const [availableVersions, setAvailableVersions] = useState([]);
-
-  // Flag to indicate a clone (new version) action.
+  // Flag to indicate if we are cloning (renaming) a version.
   const [isCloning, setIsCloning] = useState(false);
 
-  // Use a key that includes both form and version.
+  // Key to save local submission (if needed)
   const LOCAL_STORAGE_KEY = (formName, version) =>
     `form_${formName}_v_${version}_submission`;
 
-  // Delete file from either existing answer array or new uploads.
+  // Delete file (from existing answers or new uploads).
   const handleDeleteFile = (questionId, index, source) => {
     if (source === 'existing') {
       setFormData((prev) => {
@@ -73,7 +72,7 @@ export default function FormPage() {
     }
   };
 
-  // Fetch form definition for a given form and version.
+  // Fetch form definition for given form and version.
   const fetchFormDefinition = async (formName, version = '') => {
     try {
       let url = `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(formName)}`;
@@ -83,13 +82,13 @@ export default function FormPage() {
       const data = await res.json();
       if (data) {
         setLoadedFormDefinition(data);
-        // Set available versions if the backend sends an array.
+        // Set available versions (from backend).
         if (data.versions && Array.isArray(data.versions)) {
           setAvailableVersions(data.versions);
         } else {
           setAvailableVersions([data.version_name]);
         }
-        // Set selected version to the fetched version if not cloning.
+        // If not cloning, set the selected version.
         if (!isCloning) setSelectedVersion(data.version_name);
 
         // Build initial formData from DB data.
@@ -106,7 +105,7 @@ export default function FormPage() {
             }
           });
         });
-        // If a previous submission exists (based on form and version), load it.
+        // Load any previously saved submission from localStorage.
         const savedSubmission = localStorage.getItem(
           LOCAL_STORAGE_KEY(formName, version || data.version_name)
         );
@@ -123,7 +122,7 @@ export default function FormPage() {
     }
   };
 
-  // When a user selects a form from the list.
+  // When a user selects a form.
   const handleFormSelect = async (formName) => {
     setSelectedForm(formName);
     setFormData({});
@@ -137,9 +136,8 @@ export default function FormPage() {
     await fetchFormDefinition(formName);
   };
 
-  // Handle version selection from the versions combo box.
+  // When a user selects an existing version.
   const handleVersionSelect = async (version) => {
-    // When selecting an existing version, we reset the cloning flag.
     setIsCloning(false);
     setSelectedVersion(version);
     setFormData({});
@@ -149,7 +147,7 @@ export default function FormPage() {
     await fetchFormDefinition(selectedForm, version);
   };
 
-  // Handle input change for form fields.
+  // Handle input change.
   const handleInputChange = (questionId, value) => {
     setFormData((prev) => ({ ...prev, [questionId]: value }));
   };
@@ -164,39 +162,59 @@ export default function FormPage() {
     }
   };
 
-  // On form submission, include the version name.
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Common function to send form data.
+  const handleFormSend = async (action) => {
+    // action is either "save" or "submit"
     setSubmitting(true);
-
     try {
       const payload = new FormData();
-      // Append formData fields.
+      // Append text fields.
       Object.keys(formData).forEach((key) =>
         payload.append(key, formData[key])
       );
-      // Append files.
+      // Append file uploads.
       Object.keys(fileUploads).forEach((key) => {
         fileUploads[key].forEach((file) => payload.append(key, file));
       });
-      // Append the version name.
+      // Always append the current (or new) version.
       payload.append('version_name', selectedVersion);
-
-      await fetch(`http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`, {
-        method: 'POST',
-        body: payload,
-      });
+      // Append the action.
+      payload.append('action', action);
+      // If cloning is active, include new_version_name.
+      if (isCloning) {
+        payload.append('new_version_name', selectedVersion);
+      }
+      const res = await fetch(
+        `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
+        {
+          method: 'POST',
+          body: payload,
+        }
+      );
+      if (!res.ok) throw new Error('Error sending form');
+      const data = await res.json();
       setSubmitted(true);
-      // Save the submission in local storage based on form and version.
+      // Save submission locally (if desired).
       localStorage.setItem(
         LOCAL_STORAGE_KEY(selectedForm, selectedVersion),
         JSON.stringify(formData)
       );
     } catch (err) {
-      console.error('Error submitting form', err);
+      console.error('Error sending form', err);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Handler for form submission (Submit button) which enforces validation.
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await handleFormSend('submit');
+  };
+
+  // Handler for saving (Save button) that bypasses HTML5 validation.
+  const handleSave = async () => {
+    await handleFormSend('save');
   };
 
   // Render a field based on its type.
@@ -218,7 +236,6 @@ export default function FormPage() {
             />
           </div>
         );
-
       case 'textarea':
         return (
           <div className="space-y-2" key={question.id}>
@@ -236,7 +253,6 @@ export default function FormPage() {
             />
           </div>
         );
-
       case 'number':
         return (
           <div className="space-y-2" key={question.id}>
@@ -261,7 +277,6 @@ export default function FormPage() {
             />
           </div>
         );
-
       case 'dropdown':
         return (
           <div className="space-y-2" key={question.id}>
@@ -289,7 +304,6 @@ export default function FormPage() {
             </div>
           </div>
         );
-
       case 'checkbox':
         return (
           <div className="space-y-2" key={question.id}>
@@ -347,7 +361,6 @@ export default function FormPage() {
             </div>
           </div>
         );
-
       case 'radio':
         return (
           <div className="space-y-2" key={question.id}>
@@ -387,7 +400,6 @@ export default function FormPage() {
             )}
           </div>
         );
-
       case 'file': {
         const existingFiles = formData[question.id] || [];
         const newFiles = fileUploads[question.id] || [];
@@ -469,18 +481,16 @@ export default function FormPage() {
           </div>
         );
       }
-
       default:
         return null;
     }
   };
 
-  // Render the current section (page) with a page tracker.
+  // Render the current section with a page tracker.
   const renderSection = () => {
     if (!loadedFormDefinition) return null;
     const sections = loadedFormDefinition.sections;
     const section = sections[currentSection];
-
     return (
       <>
         <div className="mb-4">
@@ -553,7 +563,10 @@ export default function FormPage() {
     return (
       <form onSubmit={handleSubmit} className="space-y-8">
         {renderSection()}
-        <div className="pt-4">
+        <div className="pt-4 flex gap-4">
+          <Button type="button" variant="outline" onClick={handleSave} disabled={submitting}>
+            {submitting ? 'Saving...' : 'Save'}
+          </Button>
           <Button type="submit" disabled={submitting}>
             {submitting ? 'Submitting...' : 'Submit Form'}
           </Button>
@@ -621,13 +634,13 @@ export default function FormPage() {
                 <CardTitle>{loadedFormDefinition.form_name}</CardTitle>
                 <div className="flex items-center gap-2">
                   <Label className="text-sm">Version:</Label>
-                  {/* Editable version name input */}
+                  {/* Editable version input */}
                   <Input
                     value={selectedVersion}
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     className="w-40"
                   />
-                  {/* Clone version button: clears version name to allow for a new clone */}
+                  {/* Clone version button: clears version name to allow new clone */}
                   <Button
                     size="sm"
                     variant="outline"
@@ -650,10 +663,7 @@ export default function FormPage() {
                     </PopoverTrigger>
                     <PopoverContent className="w-40 p-0">
                       <Command>
-                        <CommandInput
-                          placeholder="Search version..."
-                          className="h-9"
-                        />
+                        <CommandInput placeholder="Search version..." className="h-9" />
                         <CommandList>
                           <CommandEmpty>No version found.</CommandEmpty>
                           <CommandGroup>
@@ -669,9 +679,7 @@ export default function FormPage() {
                                 <Check
                                   className={cn(
                                     'ml-auto',
-                                    selectedVersion === version
-                                      ? 'opacity-100'
-                                      : 'opacity-0'
+                                    selectedVersion === version ? 'opacity-100' : 'opacity-0'
                                   )}
                                 />
                               </CommandItem>
