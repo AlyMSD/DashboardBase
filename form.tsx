@@ -50,8 +50,9 @@
   const [isCloning, setIsCloning] = useState(false);
   const [clonedFromVersion, setClonedFromVersion] = useState('');
 
-  // Local storage key (if needed)
-  const LOCAL_STORAGE_KEY = (formName, version) =>
+  // Local storage key for selected version and submission data
+  const LOCAL_STORAGE_VERSION_KEY = (formName) => `selected_version_${formName}`;
+  const LOCAL_STORAGE_SUBMISSION_KEY = (formName, version) =>
    `form_${formName}_v_${version}_submission`;
 
   // Delete file (existing or new uploads)
@@ -88,8 +89,12 @@
      } else {
       setAvailableVersions([data.version_name]);
      }
-     // If not already cloning, set the selected version from backend.
-     if (!isCloning) setSelectedVersion(data.version_name);
+     // If not already cloning, set the selected version from backend and local storage.
+     if (!isCloning) {
+      const storedVersion = localStorage.getItem(LOCAL_STORAGE_VERSION_KEY(formName)) || data.version_name;
+      setSelectedVersion(storedVersion);
+     }
+
      // Build initial formData from DB data.
      const initialFormData = {};
      data.sections.forEach((section) => {
@@ -106,7 +111,7 @@
      });
      // Optionally, load any saved submission from local storage.
      const savedSubmission = localStorage.getItem(
-      LOCAL_STORAGE_KEY(formName, version || data.version_name)
+      LOCAL_STORAGE_SUBMISSION_KEY(formName, version || data.version_name)
      );
      if (savedSubmission) {
       const parsed = JSON.parse(savedSubmission);
@@ -121,23 +126,35 @@
    }
   };
 
-  // useEffect to fetch form definition when selectedForm changes
+  // useEffect to fetch form definition when selectedForm or selectedVersion changes
   useEffect(() => {
    if (selectedForm) {
     fetchFormDefinition(selectedForm, selectedVersion);
    }
   }, [selectedForm, selectedVersion]);
 
+  // useEffect to load selectedVersion from localStorage on initial load
+  useEffect(() => {
+   if (selectedForm) {
+    const storedVersion = localStorage.getItem(LOCAL_STORAGE_VERSION_KEY(selectedForm));
+    if (storedVersion) {
+     setSelectedVersion(storedVersion); // This will trigger the form fetch in the other useEffect
+    }
+   }
+  }, [selectedForm]);
+
+
   // When a user selects a form.
   const handleFormSelect = async (formName) => {
    setSelectedForm(formName);
+   localStorage.removeItem(LOCAL_STORAGE_VERSION_KEY(formName)); // Clear stored version on form change
    setFormData({});
    setFileUploads({});
    setSubmitted(false);
    setCurrentSection(0);
    setIsCloning(false);
    setClonedFromVersion('');
-   setSelectedVersion('');
+   setSelectedVersion(''); // Reset selectedVersion here too for clarity
    setAvailableVersions([]);
    await fetchFormDefinition(formName);
   };
@@ -147,6 +164,7 @@
    setIsCloning(false);
    setClonedFromVersion('');
    setSelectedVersion(version);
+   localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), version); // Store selected version
    setFormData({});
    setFileUploads({});
    setSubmitted(false);
@@ -230,9 +248,14 @@
     const data = await res.json();
     setSubmitted(true);
     localStorage.setItem(
-     LOCAL_STORAGE_KEY(selectedForm, selectedVersion),
+     LOCAL_STORAGE_SUBMISSION_KEY(selectedForm, selectedVersion),
      JSON.stringify(formData)
     );
+
+    // Re-fetch form definition to update version list after clone/save/submit
+    await fetchFormDefinition(selectedForm);
+
+
    } catch (err) {
     console.error('Error sending form', err);
    } finally {
@@ -678,6 +701,7 @@
            onChange={(e) => {
             const newVersion = e.target.value;
             setSelectedVersion(newVersion);
+            localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), newVersion); // Store version on input change
             if (loadedFormDefinition && newVersion !== loadedFormDefinition.version_name) {
              setIsCloning(true); // Set isCloning to true *immediately* on version change
              setClonedFromVersion(loadedFormDefinition.version_name); // Set clonedFromVersion
