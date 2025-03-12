@@ -202,19 +202,14 @@ export default function FormPage() {
       Object.keys(fileUploads).forEach((key) => {
         fileUploads[key].forEach((file) => payload.append(key, file));
       });
-
-      // Handle version information correctly for both normal saves and cloning
+      
+      // Handle version parameters based on cloning state
       if (isCloning) {
-        // When cloning, we need:
-        // 1. version_name - the source version we're cloning from
-        // 2. new_version_name - the new version name
         payload.append('version_name', clonedFromVersion);
         payload.append('new_version_name', selectedVersion);
       } else {
-        // When just saving/submitting an existing version, just send the current version
         payload.append('version_name', selectedVersion);
       }
-      
       payload.append('action', action);
 
       const res = await fetch(
@@ -224,28 +219,15 @@ export default function FormPage() {
           body: payload,
         }
       );
-      
       if (!res.ok) throw new Error('Error sending form');
       const data = await res.json();
-      
-      // If successful and was cloning, update our state to reflect we're now working
-      // with the new version
-      if (isCloning && data.version_name) {
-        setIsCloning(false);
-        setClonedFromVersion('');
-        setSelectedVersion(data.version_name);
-      }
-      
-      setSubmitted(data.submitted || false);
-      
-      // Save to local storage using the current/new version
+      setSubmitted(true);
       localStorage.setItem(
-        LOCAL_STORAGE_KEY(selectedForm, data.version_name || selectedVersion),
+        LOCAL_STORAGE_KEY(selectedForm, selectedVersion),
         JSON.stringify(formData)
       );
     } catch (err) {
       console.error('Error sending form', err);
-      alert("There was an error saving the form. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -690,21 +672,14 @@ export default function FormPage() {
                     value={selectedVersion}
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     className="w-40"
-                    placeholder={isCloning ? "Enter new version name" : ""}
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={handleCloneVersion}
-                    disabled={isCloning}
                   >
                     Clone Version
                   </Button>
-                  {isCloning && (
-                    <div className="text-sm text-blue-500">
-                      Cloning from: {clonedFromVersion}
-                    </div>
-                  )}
                 </div>
                 {availableVersions.length > 1 && (
                   <Popover>
@@ -744,7 +719,7 @@ export default function FormPage() {
                   </Popover>
                 )}
                 <div className="text-gray-500 text-sm">
-                  {loadedFormDefinition.description || ""}
+                  {loadedFormDefinition.version_name}
                 </div>
               </div>
             </CardHeader>
