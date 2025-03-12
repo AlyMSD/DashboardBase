@@ -87,14 +87,16 @@
      setLoadedFormDefinition(data);
      if (data.versions && Array.isArray(data.versions)) {
       setAvailableVersions(data.versions);
+      // **CHANGE:** Always set selectedVersion to the *first* version on initial load
+      if (!version && data.versions.length > 0) {
+       setSelectedVersion(data.versions[0]); // Set to the *first* version
+      }
      } else {
       setAvailableVersions([data.version_name]);
+      setSelectedVersion(data.version_name); // If no versions array, default to version_name
      }
-     // If not already cloning, set the selected version from backend and local storage.
-     if (!isCloning) {
-      const storedVersion = localStorage.getItem(LOCAL_STORAGE_VERSION_KEY(formName)) || data.version_name;
-      setSelectedVersion(storedVersion);
-     }
+     // No longer setting selectedVersion from local storage here on initial fetch.
+
 
      // Build initial formData from DB data.
      const initialFormData = {};
@@ -127,37 +129,37 @@
    }
   };
 
-  // useEffect to fetch form definition when selectedForm or selectedVersion changes
+  // useEffect to fetch form definition when selectedForm changes
   useEffect(() => {
    if (selectedForm) {
     fetchFormDefinition(selectedForm, selectedVersion);
    }
   }, [selectedForm, selectedVersion]);
 
-  // useEffect to load selectedVersion from localStorage on initial load
-  useEffect(() => {
-   if (selectedForm) {
-    const storedVersion = localStorage.getItem(LOCAL_STORAGE_VERSION_KEY(selectedForm));
-    if (storedVersion) {
-     setSelectedVersion(storedVersion); // This will trigger the form fetch in the other useEffect
-    }
-   }
-  }, [selectedForm]);
+  // useEffect to load selectedVersion from localStorage on initial load - REMOVED/MODIFIED
+  // useEffect(() => {
+  //  if (selectedForm) {
+  //   const storedVersion = localStorage.getItem(LOCAL_STORAGE_VERSION_KEY(selectedForm));
+  //   if (storedVersion) {
+  //    setSelectedVersion(storedVersion); // This will trigger the form fetch in the other useEffect
+  //   }
+  //  }
+  // }, [selectedForm]);
 
 
   // When a user selects a form.
   const handleFormSelect = async (formName) => {
    setSelectedForm(formName);
-   localStorage.removeItem(LOCAL_STORAGE_VERSION_KEY(formName)); // Clear stored version on form change
+   localStorage.removeItem(LOCAL_STORAGE_VERSION_KEY(formName)); // Clear stored version on form change - KEEP this
    setFormData({});
    setFileUploads({});
    setSubmitted(false);
    setCurrentSection(0);
    setIsCloning(false);
    setClonedFromVersion('');
-   setSelectedVersion(''); // Reset selectedVersion here too for clarity
+   setSelectedVersion(''); // **CHANGE:** Reset selectedVersion to empty string here
    setAvailableVersions([]);
-   await fetchFormDefinition(formName);
+   await fetchFormDefinition(formName); // Fetch form definition - version will be set in fetchFormDefinition
   };
 
   // When a user selects an existing version.
@@ -165,7 +167,7 @@
    setIsCloning(false);
    setClonedFromVersion('');
    setSelectedVersion(version);
-   localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), version); // Store selected version
+   localStorage.setItem(LOCAL_STORAGE_VERSION_KEY(selectedForm), version); // Store selected version - KEEP this
    setFormData({});
    setFileUploads({});
    setSubmitted(false);
