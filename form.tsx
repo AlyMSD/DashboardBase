@@ -46,14 +46,15 @@ export default function FormPage() {
   // Version states.
   const [selectedVersion, setSelectedVersion] = useState('');
   const [availableVersions, setAvailableVersions] = useState([]);
-  // Flag to indicate if we are cloning (renaming) a version.
+  // Cloning state.
   const [isCloning, setIsCloning] = useState(false);
+  const [clonedFromVersion, setClonedFromVersion] = useState('');
 
-  // Key to save local submission (if needed)
+  // Key for local storage.
   const LOCAL_STORAGE_KEY = (formName, version) =>
     `form_${formName}_v_${version}_submission`;
 
-  // Delete file (from existing answers or new uploads).
+  // Delete file from existing answer or new uploads.
   const handleDeleteFile = (questionId, index, source) => {
     if (source === 'existing') {
       setFormData((prev) => {
@@ -82,16 +83,12 @@ export default function FormPage() {
       const data = await res.json();
       if (data) {
         setLoadedFormDefinition(data);
-        // Set available versions (from backend).
         if (data.versions && Array.isArray(data.versions)) {
           setAvailableVersions(data.versions);
         } else {
           setAvailableVersions([data.version_name]);
         }
-        // If not cloning, set the selected version.
         if (!isCloning) setSelectedVersion(data.version_name);
-
-        // Build initial formData from DB data.
         const initialFormData = {};
         data.sections.forEach((section) => {
           section.questions.forEach((question) => {
@@ -105,7 +102,6 @@ export default function FormPage() {
             }
           });
         });
-        // Load any previously saved submission from localStorage.
         const savedSubmission = localStorage.getItem(
           LOCAL_STORAGE_KEY(formName, version || data.version_name)
         );
@@ -130,7 +126,7 @@ export default function FormPage() {
     setSubmitted(false);
     setCurrentSection(0);
     setIsCloning(false);
-    // Clear version-related states.
+    setClonedFromVersion('');
     setSelectedVersion('');
     setAvailableVersions([]);
     await fetchFormDefinition(formName);
@@ -139,12 +135,20 @@ export default function FormPage() {
   // When a user selects an existing version.
   const handleVersionSelect = async (version) => {
     setIsCloning(false);
+    setClonedFromVersion('');
     setSelectedVersion(version);
     setFormData({});
     setFileUploads({});
     setSubmitted(false);
     setCurrentSection(0);
     await fetchFormDefinition(selectedForm, version);
+  };
+
+  // When the user clicks "Clone Version", store the current version as the source and clear the version field.
+  const handleCloneVersion = () => {
+    setIsCloning(true);
+    setClonedFromVersion(selectedVersion);
+    setSelectedVersion('');
   };
 
   // Handle input change.
@@ -164,37 +168,28 @@ export default function FormPage() {
 
   // Common function to send form data.
   const handleFormSend = async (action) => {
-    // action is either "save" or "submit"
     setSubmitting(true);
     try {
       const payload = new FormData();
-      // Append text fields.
       Object.keys(formData).forEach((key) =>
         payload.append(key, formData[key])
       );
-      // Append file uploads.
       Object.keys(fileUploads).forEach((key) => {
         fileUploads[key].forEach((file) => payload.append(key, file));
       });
-      // Always append the current (or new) version.
       payload.append('version_name', selectedVersion);
-      // Append the action.
       payload.append('action', action);
-      // If cloning is active, include new_version_name.
       if (isCloning) {
         payload.append('new_version_name', selectedVersion);
+        payload.append('source_version', clonedFromVersion);
       }
       const res = await fetch(
         `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
-        {
-          method: 'POST',
-          body: payload,
-        }
+        { method: 'POST', body: payload }
       );
       if (!res.ok) throw new Error('Error sending form');
       const data = await res.json();
       setSubmitted(true);
-      // Save submission locally (if desired).
       localStorage.setItem(
         LOCAL_STORAGE_KEY(selectedForm, selectedVersion),
         JSON.stringify(formData)
@@ -206,13 +201,13 @@ export default function FormPage() {
     }
   };
 
-  // Handler for form submission (Submit button) which enforces validation.
+  // Handler for form submission.
   const handleSubmit = async (e) => {
     e.preventDefault();
     await handleFormSend('submit');
   };
 
-  // Handler for saving (Save button) that bypasses HTML5 validation.
+  // Handler for saving.
   const handleSave = async () => {
     await handleFormSend('save');
   };
@@ -346,10 +341,7 @@ export default function FormPage() {
                           placeholder="Please specify"
                           value={formData[`${question.id}_other`] || ''}
                           onChange={(e) =>
-                            handleInputChange(
-                              `${question.id}_other`,
-                              e.target.value
-                            )
+                            handleInputChange(`${question.id}_other`, e.target.value)
                           }
                           required={question.required}
                         />
@@ -486,7 +478,7 @@ export default function FormPage() {
     }
   };
 
-  // Render the current section with a page tracker.
+  // Render the current section with a page tracker and conditional question logic.
   const renderSection = () => {
     if (!loadedFormDefinition) return null;
     const sections = loadedFormDefinition.sections;
@@ -526,9 +518,16 @@ export default function FormPage() {
         </div>
         <div className="space-y-4">
           {section.questions.map((question) => {
+            // Conditional rendering: if the question has a conditional property,
+            // check whether the answer for the referenced question meets the condition.
             if (question.conditional) {
               const { questionId, value } = question.conditional;
-              if (formData[questionId] !== value) return null;
+              const currentAnswer = formData[questionId];
+              if (Array.isArray(value)) {
+                if (!value.includes(currentAnswer)) return null;
+              } else {
+                if (currentAnswer !== value) return null;
+              }
             }
             return renderFormField(question);
           })}
@@ -640,19 +639,15 @@ export default function FormPage() {
                     onChange={(e) => setSelectedVersion(e.target.value)}
                     className="w-40"
                   />
-                  {/* Clone version button: clears version name to allow new clone */}
+                  {/* Clone version button */}
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      setIsCloning(true);
-                      setSelectedVersion('');
-                    }}
+                    onClick={handleCloneVersion}
                   >
                     Clone Version
                   </Button>
                 </div>
-                {/* If multiple versions are available, show a version selection combo box */}
                 {availableVersions.length > 1 && (
                   <Popover>
                     <PopoverTrigger asChild>
