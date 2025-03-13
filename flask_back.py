@@ -1,178 +1,172 @@
-from flask import Flask, request, jsonify
-from pymongo import MongoClient
-from flask_cors import CORS
 import os
+from flask import Flask, request, jsonify
+from flask_pymongo import PyMongo
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-CORS(app)
 
-# MongoDB Configuration (same as before)
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/')
-DATABASE_NAME = os.environ.get('DATABASE_NAME', 'form_database')
-FORM_COLLECTION_NAME = os.environ.get('FORM_COLLECTION_NAME', 'forms')
+# MongoDB configuration (change the URI as needed)
+app.config["MONGO_URI"] = "mongodb://localhost:27017/formsdb"
 
-client = MongoClient(MONGO_URI)
-db = client[DATABASE_NAME]
-form_collection = db[FORM_COLLECTION_NAME]
+# Folder to store file uploads
+app.config["UPLOAD_FOLDER"] = "uploads"
+if not os.path.exists(app.config["UPLOAD_FOLDER"]):
+    os.makedirs(app.config["UPLOAD_FOLDER"])
 
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+mongo = PyMongo(app)
+db = mongo.db
 
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def update_question_answer(form_doc, question_id, answer_value):
+    """
+    Update the answer field for the question with the given id in the form document.
+    """
+    if "sections" in form_doc:
+        for section in form_doc["sections"]:
+            for question in section.get("questions", []):
+                if question.get("id") == question_id:
+                    question["answer"] = answer_value
 
-@app.route('/api/form', methods=['GET', 'POST'])
-def form_endpoint():
-    if request.method == 'GET':
-        form_name = request.args.get('name')
-        version = request.args.get('version')
+def update_file_question_answer(form_doc, question_id, file_paths):
+    """
+    Update file question answer in the form document.
+    If the question already has a list of file paths, new files are appended.
+    """
+    if "sections" in form_doc:
+        for section in form_doc["sections"]:
+            for question in section.get("questions", []):
+                if question.get("id") == question_id:
+                    if question.get("answer") and isinstance(question["answer"], list):
+                        question["answer"].extend(file_paths)
+                    else:
+                        question["answer"] = file_paths
 
-        if not form_name:
-            return jsonify({"error": "Form name is required"}), 400
+def process_file_uploads(form_doc):
+    """
+    Process file uploads from request.files and update the corresponding
+    file question's answer with the paths to the saved files.
+    """
+    for key in request.files:
+        files = request.files.getlist(key)
+        saved_files = []
+        for file in files:
+            if file:
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                file.save(file_path)
+                saved_files.append(file_path)
+        if saved_files:
+            update_file_question_answer(form_doc, key, saved_files)
 
-        query = {"form_name": form_name}
-        if version:
-            query["version_name"] = version
+@app.route('/api/form', methods=['GET'])
+def get_form():
+    """
+    GET endpoint to fetch a form definition by form name and (optional) version.
+    Also returns all available version names for the given form.
+    """
+    form_name = request.args.get('name')
+    version = request.args.get('version')
+    if not form_name:
+        return jsonify({"error": "Form name required"}), 400
 
-        form_definition = form_collection.find_one(query)
+    query = {"form_name": form_name}
+    if version:
+        query["version_name"] = version
 
-        if form_definition:
-            form_definition['_id'] = str(form_definition['_id'])
-            # Fetch all versions for dropdown
-            all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1) # sort versions
-            all_versions = [v['version_name'] for v in all_versions_cursor]
-            form_definition['versions'] = all_versions # Include versions in response
-            return jsonify(form_definition)
-        else:
+    form = db.forms.find_one(query)
+    if not form:
+        return jsonify({"error": "Form not found"}), 404
+
+    # Get all available versions for this form.
+    versions = list(db.forms.find({"form_name": form_name}).distinct("version_name"))
+    form["versions"] = versions
+
+    # Convert Mongo _id to string.
+    form["_id"] = str(form["_id"])
+    return jsonify(form)
+
+@app.route('/api/form', methods=['POST'])
+def save_form():
+    """
+    POST endpoint to save or submit a form.
+    
+    Handles three main cases:
+      1. **Normal Update:** Update answers on the current version.
+      2. **Renaming:** Update an existing version's name (when the new version name is provided and differs).
+      3. **Cloning / Create New Version:** Clone an existing version (or the "BlankTemplate") into a new one.
+         In this case, the client must provide a new version name (via `new_version_name`), and if needed, override
+         the form name (when cloning a blank template).
+    
+    A conflict is returned if the new version already exists.
+    """
+    # form name is provided in the query string
+    form_name_query = request.args.get('name')
+    if not form_name_query:
+        return jsonify({"error": "Form name required in query parameter"}), 400
+
+    # Extract the parameters from the form-data payload.
+    current_version = request.form.get('version_name')  # current version to update or clone from
+    new_version = request.form.get('new_version_name')    # provided if cloning or renaming
+    action = request.form.get('action')                   # either 'save' or 'submit'
+    # For "create new version", the frontend sends an additional form_name (the current form)
+    new_form_name = request.form.get('form_name', form_name_query)
+
+    # If a new_version is provided, we treat this as a clone/rename action.
+    if new_version:
+        # Check if the new version already exists for this form.
+        exists = db.forms.find_one({"form_name": new_form_name, "version_name": new_version})
+        if exists:
+            return jsonify({"error": "Version name already exists."}), 409
+
+        # Retrieve the source form to clone from.
+        source = db.forms.find_one({"form_name": form_name_query, "version_name": current_version})
+        # Special case: if cloning a "BlankTemplate", try to get it from the proper document.
+        if not source and current_version == "BlankTemplate_v_1":
+            source = db.forms.find_one({"form_name": "BlankTemplate", "version_name": "v_1"})
+        if not source:
+            return jsonify({"error": "Source form not found for cloning."}), 404
+
+        # Remove the MongoDB _id field so we can insert as a new document.
+        source.pop("_id", None)
+        # Update with the new version name and (if provided) new form name.
+        source["version_name"] = new_version
+        source["form_name"] = new_form_name
+        source["submitted"] = (action == "submit")
+
+        # Update any answers from the text fields sent in the payload.
+        for key in request.form:
+            if key not in ["version_name", "new_version_name", "action", "form_name"]:
+                update_question_answer(source, key, request.form.get(key))
+
+        # Process any file uploads.
+        process_file_uploads(source)
+
+        # Insert the new (cloned/renamed) form into the database.
+        inserted = db.forms.insert_one(source)
+        new_doc = db.forms.find_one({"_id": inserted.inserted_id})
+        new_doc["_id"] = str(new_doc["_id"])
+        new_doc["versions"] = list(db.forms.find({"form_name": new_form_name}).distinct("version_name"))
+        return jsonify(new_doc)
+
+    else:
+        # No new_version provided – perform a normal update on the existing version.
+        doc = db.forms.find_one({"form_name": form_name_query, "version_name": current_version})
+        if not doc:
             return jsonify({"error": "Form not found"}), 404
 
-    elif request.method == 'POST':
-        form_name = request.args.get('name') # Form name from URL - this is the *target* form name
-        if not form_name:
-            return jsonify({"error": "Form name is required"}), 400
-
-        action = request.form.get('action')
-        version_name_input = request.form.get('version_name') # Source version string (e.g., "BlankTemplate_v_1")
-        new_version_name_input = request.form.get('new_version_name') # New version name input by user
-        target_form_name_clone = request.form.get('form_name') # **NEW**: form_name for clone operation
-
-        if not version_name_input: # changed from version_name
-            return jsonify({"error": "Version name is required"}), 400
-
-        form_data = {}
-        files_data = {}
-
+        # Update text field answers.
         for key in request.form:
-            if key not in ['action', 'version_name', 'new_version_name', 'form_name']:
-                form_data[key] = request.form.get(key)
+            if key not in ["version_name", "action"]:
+                update_question_answer(doc, key, request.form.get(key))
 
-        for key in request.files:
-            uploaded_files = request.files.getlist(key)
-            file_list = []
-            for file in uploaded_files:
-                if file and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(file_path)
-                    file_list.append(filename)
-                else:
-                    return jsonify({"error": f"Invalid file type for {file.filename}"}), 400
-            if file_list:
-                files_data[key] = file_list
+        # Process file uploads.
+        process_file_uploads(doc)
 
-        submission_data = {
-            "form_name": form_name,
-            "version_name": version_name_input, # changed from version_name
-            "action": action,
-            "form_data": form_data,
-            "files_data": files_data,
-            "submitted": action == 'submit'
-        }
-
-        if new_version_name_input: # Cloning scenario
-            new_version_name = new_version_name_input.strip()
-            if not new_version_name:
-                return jsonify({"error": "New version name is required for cloning"}), 400
-
-            # Check if version name already exists for this form
-            existing_version = form_collection.find_one({"form_name": form_name, "version_name": new_version_name})
-            if existing_version:
-                return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
-
-            # ** Parse source form and version from version_name_input string **
-            source_form_name = "BlankTemplate" # default
-            source_version_name = "1" # default
-
-            if version_name_input: # version_name_input will be like "BlankTemplate_v_1"
-                parts = version_name_input.split('_v_')
-                if len(parts) == 2:
-                    source_form_name = parts[0]
-                    source_version_name = parts[1]
-
-            print(f"Backend: Cloning from Form: '{source_form_name}', Version: '{source_version_name}'") # **DEBUG LOGGING**
-            print(f"Backend: Cloning to Form Name: '{form_name}', New Version Name: '{new_version_name}'") # **DEBUG LOGGING**
-
-
-            form_to_clone = form_collection.find_one({"form_name": source_form_name, "version_name": source_version_name})
-            if not form_to_clone:
-                return jsonify({"error": f"Version to clone not found: Form '{source_form_name}', Version '{source_version_name}'"}), 404
-
-            del form_to_clone['_id']
-            form_to_clone['form_name'] = target_form_name_clone if target_form_name_clone else form_name # **NEW**: Use target_form_name_clone from payload, fallback to URL form_name
-            form_to_clone['version_name'] = new_version_name # User-provided new version name
-            form_to_clone['submitted'] = False
-            form_id = form_collection.insert_one(form_to_clone)
-            print(f"Backend: Created new cloned version with ID: {form_id.inserted_id}") # **DEBUG LOGGING**
-
-
-        else: # Save or Submit existing version (or rename)
-            form_definition = form_collection.find_one({"form_name": form_name, "version_name": version_name_input}) # changed from version_name
-            if not form_definition:
-                return jsonify({"error": "Form definition not found"}), 404
-
-            # Check for version rename
-            if new_version_name_input and new_version_name_input.strip() != version_name_input: # changed from version_name
-                proposed_new_version_name = new_version_name_input.strip()
-                existing_version_same_name = form_collection.find_one({"form_name": form_name, "version_name": proposed_new_version_name})
-                if existing_version_same_name:
-                    return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
-
-                # Rename version
-                form_collection.update_one(
-                    {"_id": form_definition["_id"]},
-                    {"$set": {"version_name": proposed_new_version_name, "submitted": action == 'submit'}} # Update version_name and submitted
-                )
-
-
-            else: # Just save/submit data, no rename
-                for section_index, section in enumerate(form_definition.get("sections", [])):
-                    for question_index, question in enumerate(section.get("questions", [])):
-                        question_id = question.get("id")
-                        if question_id in form_data:
-                            form_definition["sections"][section_index]["questions"][question_index]["answer"] = form_data[question_id]
-                        if question_id in files_data:
-                             form_definition["sections"][section_index]["questions"][question_index]["answer"] = files_data[question_id]
-
-                form_collection.update_one(
-                    {"_id": form_definition["_id"]},
-                    {"$set": {"sections": form_definition["sections"], "submitted": action == 'submit'}} # Just update sections and submitted
-                )
-
-
-        # After POST, always refetch the form definition to get updated version list for frontend dropdown
-        updated_form_definition = form_collection.find_one({"form_name": form_name, "version_name": new_version_name if new_version_name_input else version_name_input}) # changed from version_name
-        updated_form_definition['_id'] = str(updated_form_definition['_id'])
-        all_versions_cursor = form_collection.find({"form_name": form_name}).sort("version_name", 1)
-        all_versions = [v['version_name'] for v in all_versions_cursor]
-        updated_form_definition['versions'] = all_versions # Re-include versions
-        return jsonify(updated_form_definition) # Return updated form definition including versions
-
-
-    return jsonify({"error": "Invalid method"}), 400
+        doc["submitted"] = (action == "submit")
+        db.forms.update_one({"_id": doc["_id"]}, {"$set": doc})
+        updated_doc = db.forms.find_one({"_id": doc["_id"]})
+        updated_doc["_id"] = str(updated_doc["_id"])
+        updated_doc["versions"] = list(db.forms.find({"form_name": form_name_query}).distinct("version_name"))
+        return jsonify(updated_doc)
 
 if __name__ == '__main__':
     app.run(debug=True)
