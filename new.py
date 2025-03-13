@@ -1,209 +1,182 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from pymongo import MongoClient
+from flask import Flask, request, jsonify, abort
+from pymongo import MongoClient, errors
+from bson.objectid import ObjectId
+import os
 
 app = Flask(__name__)
-CORS(app)
+# Connect to MongoDB (adjust connection string as needed)
+client = MongoClient(os.environ.get("MONGO_URI", "mongodb://localhost:27017"))
+db = client['formsdb']  # Database name
+forms_collection = db['forms']  # Collection name
 
-# MongoDB Connection (Make sure your MongoDB is running)
-client = MongoClient('mongodb://localhost:27017/')
-db = client['form_builder']  # Replace with your database name
-forms_collection = db['forms']  # Replace with your collection name
+def get_all_versions(form_name):
+    """Return list of version names available for a given form."""
+    versions = forms_collection.find({"form_name": form_name}, {"version_name": 1})
+    return [doc["version_name"] for doc in versions]
 
-@app.route('/api/form', methods=['GET'])
+def reset_answers(form_definition):
+    """
+    Clone a form definition but clear answers in every question.
+    Returns a new form document.
+    """
+    new_form = form_definition.copy()
+    # Do not copy the _id field when inserting as a new document.
+    new_form.pop("_id", None)
+    # Reset the submitted flag and update answer in each question.
+    new_form["submitted"] = False
+    for section in new_form.get("sections", []):
+        for question in section.get("questions", []):
+            # Remove any prefilled answers.
+            question["answer"] = None
+    return new_form
+
+@app.route("/api/form", methods=["GET"])
 def get_form():
-    name = request.args.get('name')
-    version = request.args.get('version')
+    """
+    GET /api/form?name=<form_name>&version=<version_name>
+    If version is not provided, return the first document for the form.
+    Additionally, return a list of all available versions.
+    """
+    form_name = request.args.get("name")
+    if not form_name:
+        return jsonify({"error": "Form name is required"}), 400
 
-    if not name:
-        return jsonify({'error': 'Form name is required'}), 400
-
-    query = {'form_name': name}
+    version = request.args.get("version", None)
+    query = {"form_name": form_name}
     if version:
-        query['version_name'] = version
+        query["version_name"] = version
 
-    form_data = forms_collection.find_one(query)
+    form_doc = forms_collection.find_one(query)
+    if not form_doc:
+        return jsonify({"error": "Form not found"}), 404
 
-    if form_data:
-        # Fetch all versions for the form
-        all_versions = forms_collection.find({'form_name': name}, {'version_name': 1, '_id': 0}).distinct('version_name')
-        form_data['versions'] = list(all_versions)
-        # Remove the internal MongoDB id
-        form_data['_id'] = str(form_data['_id'])
-        return jsonify(form_data)
-    else:
-        return jsonify({'error': 'Form not found'}), 404
+    # Add available versions to the response.
+    form_doc["versions"] = get_all_versions(form_name)
+    # Convert ObjectId to string if needed.
+    form_doc["_id"] = str(form_doc["_id"])
+    return jsonify(form_doc), 200
 
-@app.route('/api/form', methods=['POST'])
-def update_form():
-    name = request.args.get('name')
-    action = request.form.get('action')
-    version_name = request.form.get('version_name')
-    new_version_name = request.form.get('new_version_name')
-    cloned_from_version = request.form.get('version_name') # In frontend, this is used for source
+@app.route("/api/form", methods=["POST"])
+def post_form():
+    """
+    POST /api/form?name=<form_name>
+    This endpoint supports three scenarios:
+      - Regular save/submit to an existing version.
+      - Renaming an existing version.
+      - Cloning a version (creating a new version with blank answers).
+    
+    The expected form data in the request (multipart/form-data) includes:
+      - form fields corresponding to question IDs.
+      - version_name: current version being edited.
+      - new_version_name: new version name if renaming or cloning.
+      - form_name (if cloning)
+      - action: 'save' or 'submit'
+    """
+    form_name = request.args.get("name")
+    if not form_name:
+        return jsonify({"error": "Form name is required in query parameters"}), 400
 
-    if not name:
-        return jsonify({'error': 'Form name is required'}), 400
+    # Get posted data (using request.form for text fields)
+    posted = request.form.to_dict()
+    action = posted.get("action")
+    version_name = posted.get("version_name")
+    new_version_name = posted.get("new_version_name", "").strip()
 
-    if action not in ['save', 'submit']:
-        return jsonify({'error': 'Invalid action'}), 400
+    if not version_name:
+        return jsonify({"error": "version_name is required"}), 400
 
-    existing_form = forms_collection.find_one({'form_name': name, 'version_name': version_name})
+    # Determine if this is a clone or rename operation.
+    is_cloning = new_version_name and posted.get("form_name")
+    is_renaming = new_version_name and not is_cloning
 
-    if not existing_form and action != 'submit' and not new_version_name and not cloned_from_version:
-        return jsonify({'error': 'Form version not found'}), 404
-
+    # For cloning and renaming, check if the new version already exists.
     if new_version_name:
-        # Check if the new version name already exists for this form
-        if forms_collection.find_one({'form_name': name, 'version_name': new_version_name}):
-            return jsonify({'error': 'Version name already exists.'}), 409
+        if forms_collection.find_one({"form_name": form_name, "version_name": new_version_name}):
+            return jsonify({"error": "Version name already exists."}), 409
 
-        if cloned_from_version and cloned_from_version != 'BlankTemplate':
-            # Clone from an existing version
-            source_form = forms_collection.find_one({'form_name': name, 'version_name': cloned_from_version})
-            if not source_form:
-                return jsonify({'error': 'Source version not found for cloning'}), 404
-            new_form_data = source_form.copy()
-            new_form_data['version_name'] = new_version_name
-            new_form_data['submitted'] = False
-            # Clear existing answers for the new version
-            for section in new_form_data.get('sections', []):
-                for question in section.get('questions', []):
-                    question['answer'] = None
-            forms_collection.insert_one(new_form_data)
-            return jsonify(new_form_data)
-        elif cloned_from_version == 'BlankTemplate':
-            # Create a new version from a blank template
-            base_form = forms_collection.find_one({'form_name': name, 'version_name': 'BlankTemplate_v_1'}) # Assuming you have a base template
-            if not base_form:
-                return jsonify({'error': 'Blank template not found'}), 404
-            new_form_data = base_form.copy()
-            new_form_data['version_name'] = new_version_name
-            new_form_data['submitted'] = False
-            # Clear existing answers
-            for section in new_form_data.get('sections', []):
-                for question in section.get('questions', []):
-                    question['answer'] = None
-            forms_collection.insert_one(new_form_data)
-            return jsonify(new_form_data)
-        else:
-            # Rename the current version
-            if not existing_form:
-                return jsonify({'error': 'Form version to rename not found'}), 404
+    # For file uploads, here we assume they are appended in the request.files
+    # and for simplicity we just record their filenames.
+    file_data = {}
+    for key in request.files:
+        files = request.files.getlist(key)
+        file_data[key] = [file.filename for file in files]
+        # In production you might store the files and use their storage paths.
+
+    # Retrieve the existing document (source) if any.
+    source_doc = forms_collection.find_one({"form_name": form_name, "version_name": version_name})
+    if not source_doc:
+        # If no source document exists, create a new one.
+        source_doc = {
+            "form_name": form_name,
+            "version_name": version_name,
+            "submitted": False,
+            "sections": []
+        }
+    
+    if is_cloning:
+        # Clone the source document but reset answers.
+        new_doc = reset_answers(source_doc)
+        new_doc["version_name"] = new_version_name
+        # Update answers with posted form data.
+        for section in new_doc.get("sections", []):
+            for question in section.get("questions", []):
+                qid = question.get("id")
+                if qid in posted:
+                    question["answer"] = posted[qid]
+                if qid in file_data:
+                    # If files are provided, update answer with list of filenames.
+                    question["answer"] = file_data[qid]
+        try:
+            result = forms_collection.insert_one(new_doc)
+            new_doc["_id"] = str(result.inserted_id)
+        except errors.PyMongoError as e:
+            return jsonify({"error": str(e)}), 500
+        response_doc = new_doc
+    elif is_renaming:
+        # Rename the existing version: update version_name in the document.
+        try:
             forms_collection.update_one(
-                {'form_name': name, 'version_name': version_name},
-                {'$set': {'version_name': new_version_name}}
+                {"form_name": form_name, "version_name": version_name},
+                {"$set": {"version_name": new_version_name}}
             )
-            updated_form = forms_collection.find_one({'form_name': name, 'version_name': new_version_name})
-            updated_form['_id'] = str(updated_form['_id'])
-            return jsonify(updated_form)
-
-    # Handle save or submit for an existing version
-    if existing_form:
-        updated_answers = {}
-        for key in request.form:
-            if key not in ['action', 'version_name', 'new_version_name']:
-                updated_answers[key] = request.form.getlist(key) if len(request.form.getlist(key)) > 1 else request.form.get(key)
-
-        # Update answers in the database
-        for section_index, section in enumerate(existing_form.get('sections', [])):
-            for question_index, question in enumerate(section.get('questions', [])):
-                if question['id'] in updated_answers:
-                    existing_form['sections'][section_index]['questions'][question_index]['answer'] = updated_answers[question['id']]
-
-        # Handle file uploads (for simplicity, we are not actually saving files here, just noting their presence)
-        for key in request.files:
-            files = request.files.getlist(key)
-            if files:
-                # Update the 'answer' field for file type questions
-                for section_index, section in enumerate(existing_form.get('sections', [])):
-                    for question_index, question in enumerate(section.get('questions', [])):
-                        if question['id'] == key and question['type'] == 'file':
-                            # For simplicity, just store the filenames
-                            existing_form['sections'][section_index]['questions'][question_index]['answer'] = [file.filename for file in files]
-
-        # Update the submitted status if the action is 'submit'
-        if action == 'submit':
-            existing_form['submitted'] = True
-
-        forms_collection.update_one(
-            {'form_name': name, 'version_name': version_name},
-            {'$set': existing_form}
-        )
-        existing_form['_id'] = str(existing_form['_id'])
-        return jsonify(existing_form)
+            source_doc["version_name"] = new_version_name
+        except errors.PyMongoError as e:
+            return jsonify({"error": str(e)}), 500
+        response_doc = source_doc
     else:
-        return jsonify({'error': 'Form version not found for updating'}), 404
+        # Regular save or submit.
+        # Update the source document with the provided answers.
+        # Loop through sections/questions and update the answer if provided.
+        for section in source_doc.get("sections", []):
+            for question in section.get("questions", []):
+                qid = question.get("id")
+                if qid in posted:
+                    question["answer"] = posted[qid]
+                # If there are file uploads:
+                if qid in file_data:
+                    question["answer"] = file_data[qid]
+        # If the action is "submit", set submitted to True.
+        source_doc["submitted"] = (action == "submit")
+        try:
+            # If the document exists, update it; otherwise, insert it.
+            if "_id" in source_doc:
+                forms_collection.update_one(
+                    {"_id": source_doc["_id"]},
+                    {"$set": source_doc}
+                )
+            else:
+                result = forms_collection.insert_one(source_doc)
+                source_doc["_id"] = result.inserted_id
+        except errors.PyMongoError as e:
+            return jsonify({"error": str(e)}), 500
+        response_doc = source_doc
 
-if __name__ == '__main__':
-    # Example of creating a blank template if it doesn't exist
-    if not forms_collection.find_one({'form_name': 'user info', 'version_name': 'BlankTemplate_v_1'}):
-        blank_template = {
-            "form_name": "user info",
-            "version_name": "BlankTemplate_v_1",
-            "submitted": False,
-            "sections": [
-                {
-                    "name": "Name Section",
-                    "description": "An area for the user to add their name",
-                    "questions": [
-                        {
-                            "id": "name",
-                            "type": "text",
-                            "label": "Your Name",
-                            "placeholder": "Enter your full name",
-                            "answer": None,
-                            "required": True
-                        },
-                        {
-                            "id": "filesUp",
-                            "type": "file",
-                            "label": "Attach any files that are relevant",
-                            "allowedTypes": ["application/pdf"],
-                            "multiple": True,
-                            "conditional": {"questionId": "name", "value": ["Yes"]},
-                            "answer": None,
-                            "required": False
-                        }
-                    ]
-                }
-            ]
-        }
-        forms_collection.insert_one(blank_template)
+    # After any operation, return the updated document along with the available versions.
+    response_doc["versions"] = get_all_versions(form_name)
+    # Ensure _id is serializable.
+    if isinstance(response_doc.get("_id"), ObjectId):
+        response_doc["_id"] = str(response_doc["_id"])
+    return jsonify(response_doc), 200
 
-    # Example of creating the initial form if it doesn't exist
-    if not forms_collection.find_one({'form_name': 'user info', 'version_name': 'Q1 2025'}):
-        initial_form_data = {
-            "form_name": "user info",
-            "version_name": "Q1 2025",
-            "submitted": False,
-            "sections": [
-                {
-                    "name": "Name Section",
-                    "description": "An area for the user to add their name",
-                    "questions": [
-                        {
-                            "id": "name",
-                            "type": "text",
-                            "label": "Your Name",
-                            "placeholder": "Enter your full name",
-                            "answer": None,
-                            "required": True
-                        },
-                        {
-                            "id": "filesUp",
-                            "type": "file",
-                            "label": "Attach any files that are relevant",
-                            "allowedTypes": ["application/pdf"],
-                            "multiple": True,
-                            "conditional": {"questionId": "name", "value": ["Yes"]},
-                            "answer": None,
-                            "required": False
-                        }
-                    ]
-                }
-            ]
-        }
-        forms_collection.insert_one(initial_form_data)
-
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
