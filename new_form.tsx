@@ -153,64 +153,61 @@ export default function FormPage() {
   // Send form data
   const handleFormSend = async (action) => {
     if ((action === 'clone' || action === 'new_version' || action === 'rename') && !newVersionName) {
-      setVersionNameError('Please enter a new version name.');
-      return;
+        setVersionNameError('Please enter a new version name.');
+        return;
     }
 
     setSubmitting(true);
     setVersionNameError('');
     try {
-      const payload = new FormData();
-      Object.entries(formData).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-          value.forEach((val) => payload.append(key, val));
-        } else {
-          payload.append(key, value);
+        const payload = new FormData();
+        Object.entries(formData).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach((val) => payload.append(key, val));
+            } else {
+                payload.append(key, value);
+            }
+        });
+        Object.entries(fileUploads).forEach(([key, files]) => {
+            files.forEach((file) => payload.append(key, file));
+        });
+
+        payload.append('version_name', selectedVersion);
+        if (action === 'clone' || action === 'new_version' || action === 'rename') {
+            payload.append('new_version_name', newVersionName);
         }
-      });
-      Object.entries(fileUploads).forEach(([key, files]) => {
-        files.forEach((file) => payload.append(key, file));
-      });
+        payload.append('action', action);
 
-      payload.append('version_name', selectedVersion);
-      if (action === 'clone' || action === 'new_version' || action === 'rename') {
-        payload.append('new_version_name', newVersionName);
-      }
-      payload.append('action', action);
-
-      const res = await fetch(
-        `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
-        { method: 'POST', body: payload }
-      );
-
-      if (!res.ok) {
-        if (res.status === 409) {
-          const errorData = await res.json();
-          setVersionNameError(errorData.error || 'Version name already exists.');
-        }
-        throw new Error('Error sending form');
-      }
-
-      const data = await res.json();
-      setLoadedFormDefinition(data);
-      setAvailableVersions(data.versions);
-      setSelectedVersion(data.version_name);
-      setNewVersionName('');
-      if (action === 'submit') {
-        setSubmitted(true);
-        localStorage.setItem(
-          LOCAL_STORAGE_SUBMISSION_KEY(selectedForm, data.version_name),
-          JSON.stringify(formData)
+        const res = await fetch(
+            `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(selectedForm)}`,
+            { method: 'POST', body: payload }
         );
-      }
-      await fetchFormDefinition(selectedForm, data.version_name);
-    } catch (err) {
-      console.error('Error sending form', err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
+        if (!res.ok) {
+            if (res.status === 409) {
+                const errorData = await res.json();
+                setVersionNameError(errorData.error || 'Version name already exists.');
+            }
+            throw new Error('Error sending form');
+        }
+
+        const data = await res.json();
+        setSelectedVersion(data.version_name); // Update selected version
+        setNewVersionName(''); // Clear input field
+        if (action === 'submit') {
+            setSubmitted(true);
+            localStorage.setItem(
+                LOCAL_STORAGE_SUBMISSION_KEY(selectedForm, data.version_name),
+                JSON.stringify(formData)
+            );
+        }
+        await fetchFormDefinition(selectedForm, data.version_name); // Fetch updated form and versions
+    } catch (err) {
+        console.error('Error sending form', err);
+    } finally {
+        setSubmitting(false);
+    }
+};
   // Form field rendering
   const renderFormField = (question) => {
     switch (question.type) {
