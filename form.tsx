@@ -193,7 +193,7 @@
   // When the user clicks "Create New Version"
   const handleCreateNewVersion = () => {
    setIsCloning(true);
-   setClonedFromVersion('BlankTemplate'); // Clone from "BlankTemplate"
+   setClonedFromVersion('BlankTemplate_v_1'); // Clone from "BlankTemplate" version "1"
    setSelectedVersion(''); // Clear version input for new version name
   };
 
@@ -240,8 +240,9 @@
 
     // Handle version parameters based on cloning, rename current, or regular save/submit
     if (isCloning) { // CLONING: create a new version from a source version
-     payload.append('version_name', clonedFromVersion); // Use "BlankTemplate" or selected version for cloning source
+     payload.append('version_name', clonedFromVersion); // Use "BlankTemplate_v_1" for cloning source
      payload.append('new_version_name', selectedVersion); // New version name (for the *new* cloned version)
+     payload.append('form_name', selectedForm); // **NEW**: Set the form_name for the cloned version
     } else if (isRenamingCurrentVersion) { // RENAMING CURRENT VERSION: update the version name of the *existing* version
      payload.append('version_name', loadedFormDefinition.version_name); // *Original* version name (to identify the version to rename)
      payload.append('new_version_name', selectedVersion); // *New* version name (the new name to set)
