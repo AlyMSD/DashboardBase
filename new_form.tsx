@@ -47,7 +47,7 @@ export default function FormPage() {
   // Version states.
   const [selectedVersion, setSelectedVersion] = useState('');
   const [availableVersions, setAvailableVersions] = useState([]);
-  // Cloning states.
+  // Cloning state.
   const [isCloning, setIsCloning] = useState(false);
   const [clonedFromVersion, setClonedFromVersion] = useState('');
   const [versionNameError, setVersionNameError] = useState('');
@@ -77,7 +77,7 @@ export default function FormPage() {
     }
   };
 
-  // Fetch form definition for given form and version.
+  // Fetch form definition for a given form and version.
   const fetchFormDefinition = async (formName, version = '') => {
     if (!formName) return;
     try {
@@ -170,18 +170,23 @@ export default function FormPage() {
     await fetchFormDefinition(selectedForm, version);
   };
 
-  // Clone version.
+  // When the user clicks "Clone Version" – clear the current answers so the clone starts blank.
   const handleCloneVersion = () => {
     setIsCloning(true);
     setClonedFromVersion(selectedVersion);
-    setSelectedVersion('');
+    setSelectedVersion(''); // User will enter a new version name
+    setFormData({});      // Clear answers for new clone
+    setFileUploads({});
   };
 
-  // Create a new version.
+  // When the user clicks "Create New Version" – always clone the currently selected version with blank answers.
   const handleCreateNewVersion = () => {
     setIsCloning(true);
-    setClonedFromVersion('BlankTemplate');
+    // Use the current version as the source for cloning.
+    setClonedFromVersion(selectedVersion);
     setSelectedVersion('');
+    setFormData({});      // Clear answers for new version
+    setFileUploads({});
   };
 
   // Handle input changes.
@@ -204,33 +209,38 @@ export default function FormPage() {
     setSubmitting(true);
     setVersionNameError('');
     try {
+      // Determine if we should perform a renaming or a cloning operation.
+      // If isCloning is true, we always clone (i.e. create a new version with reset answers).
       const isRenamingCurrentVersion =
         loadedFormDefinition &&
         selectedVersion !== loadedFormDefinition.version_name &&
         !isCloning;
 
-      if (isCloning && !selectedVersion) {
-        alert('Please enter a new version name.');
-        setSubmitting(false);
-        return;
-      }
-
       const payload = new FormData();
-      Object.keys(formData).forEach((key) =>
-        payload.append(key, formData[key])
-      );
+      
+      // If cloning, we send an empty answer set (or only send fields the user might fill after cloning)
+      // Otherwise, we send the current formData.
+      if (!isCloning) {
+        Object.keys(formData).forEach((key) =>
+          payload.append(key, formData[key])
+        );
+      }
+      // Always send file uploads.
       Object.keys(fileUploads).forEach((key) => {
         fileUploads[key].forEach((file) => payload.append(key, file));
       });
 
       if (isCloning) {
+        // Cloning: use the source version from clonedFromVersion and provide new_version_name.
         payload.append('version_name', clonedFromVersion);
         payload.append('new_version_name', selectedVersion);
         payload.append('form_name', selectedForm);
       } else if (isRenamingCurrentVersion) {
+        // Renaming the current version.
         payload.append('version_name', loadedFormDefinition.version_name);
         payload.append('new_version_name', selectedVersion);
       } else {
+        // Regular save/submit to existing version.
         payload.append('version_name', selectedVersion);
       }
       payload.append('action', action);
@@ -275,6 +285,8 @@ export default function FormPage() {
       if (selectedForm && data.version_name) {
         await fetchFormDefinition(selectedForm, data.version_name);
       }
+      // Reset cloning flag after successful operation.
+      setIsCloning(false);
     } catch (err) {
       console.error('Error sending form', err);
     } finally {
