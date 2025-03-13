@@ -51,13 +51,14 @@ def form_endpoint():
             return jsonify({"error": "Form not found"}), 404
 
     elif request.method == 'POST':
-        form_name = request.args.get('name')
+        form_name = request.args.get('name') # Form name from URL - this is the *target* form name
         if not form_name:
             return jsonify({"error": "Form name is required"}), 400
 
-        action = request.form.get('action') # 'save' or 'submit'
-        version_name_input = request.form.get('version_name') # this is now source version string "FormName_v_Version" in clone case, or just version_name in other cases
-        new_version_name_input = request.form.get('new_version_name') # for cloning, and rename input
+        action = request.form.get('action')
+        version_name_input = request.form.get('version_name') # Source version string (e.g., "BlankTemplate_v_1")
+        new_version_name_input = request.form.get('new_version_name') # New version name input by user
+        target_form_name_clone = request.form.get('form_name') # **NEW**: form_name for clone operation
 
         if not version_name_input: # changed from version_name
             return jsonify({"error": "Version name is required"}), 400
@@ -66,7 +67,7 @@ def form_endpoint():
         files_data = {}
 
         for key in request.form:
-            if key not in ['action', 'version_name', 'new_version_name']:
+            if key not in ['action', 'version_name', 'new_version_name', 'form_name']:
                 form_data[key] = request.form.get(key)
 
         for key in request.files:
@@ -93,7 +94,7 @@ def form_endpoint():
         }
 
         if new_version_name_input: # Cloning scenario
-            new_version_name = new_version_name_input.strip() # use input new version name
+            new_version_name = new_version_name_input.strip()
             if not new_version_name:
                 return jsonify({"error": "New version name is required for cloning"}), 400
 
@@ -103,8 +104,8 @@ def form_endpoint():
                 return jsonify({"error": "Version name already exists"}), 409 # 409 Conflict
 
             # ** Parse source form and version from version_name_input string **
-            source_form_name = "BlankTemplate" # default if parsing fails
-            source_version_name = "1" # default if parsing fails
+            source_form_name = "BlankTemplate" # default
+            source_version_name = "1" # default
 
             if version_name_input: # version_name_input will be like "BlankTemplate_v_1"
                 parts = version_name_input.split('_v_')
@@ -112,15 +113,20 @@ def form_endpoint():
                     source_form_name = parts[0]
                     source_version_name = parts[1]
 
-            form_to_clone = form_collection.find_one({"form_name": source_form_name, "version_name": source_version_name}) # **Use parsed source_form_name and source_version_name**
+            print(f"Backend: Cloning from Form: '{source_form_name}', Version: '{source_version_name}'") # **DEBUG LOGGING**
+            print(f"Backend: Cloning to Form Name: '{form_name}', New Version Name: '{new_version_name}'") # **DEBUG LOGGING**
+
+
+            form_to_clone = form_collection.find_one({"form_name": source_form_name, "version_name": source_version_name})
             if not form_to_clone:
                 return jsonify({"error": f"Version to clone not found: Form '{source_form_name}', Version '{source_version_name}'"}), 404
 
             del form_to_clone['_id']
-            form_to_clone['form_name'] = form_name # **Ensure cloned form has the currently selected form_name**
-            form_to_clone['version_name'] = new_version_name # Use the NEW version name
+            form_to_clone['form_name'] = target_form_name_clone if target_form_name_clone else form_name # **NEW**: Use target_form_name_clone from payload, fallback to URL form_name
+            form_to_clone['version_name'] = new_version_name # User-provided new version name
             form_to_clone['submitted'] = False
             form_id = form_collection.insert_one(form_to_clone)
+            print(f"Backend: Created new cloned version with ID: {form_id.inserted_id}") # **DEBUG LOGGING**
 
 
         else: # Save or Submit existing version (or rename)
