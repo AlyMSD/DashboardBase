@@ -50,9 +50,9 @@ export default function FormPage() {
   // Cloning states.
   const [isCloning, setIsCloning] = useState(false);
   const [clonedFromVersion, setClonedFromVersion] = useState('');
-  const [versionNameError, setVersionNameError] = useState(''); // State for version name error
+  const [versionNameError, setVersionNameError] = useState('');
 
-  // Local storage key for selected version and submission data
+  // Local storage keys.
   const LOCAL_STORAGE_VERSION_KEY = (formName) =>
     `selected_version_${formName}`;
   const LOCAL_STORAGE_SUBMISSION_KEY = (formName, version) =>
@@ -79,7 +79,7 @@ export default function FormPage() {
 
   // Fetch form definition for given form and version.
   const fetchFormDefinition = async (formName, version = '') => {
-    if (!formName) return; // Prevent fetch if formName is empty
+    if (!formName) return;
     try {
       let url = `http://127.0.0.1:5000/api/form?name=${encodeURIComponent(
         formName
@@ -90,14 +90,13 @@ export default function FormPage() {
         console.error(
           `Error fetching form definition: ${res.status} ${res.statusText} for URL: ${url}`
         );
-        return; // Exit if fetch fails, handle error appropriately
+        return;
       }
       const data = await res.json();
       if (data) {
         setLoadedFormDefinition(data);
         if (data.versions && Array.isArray(data.versions)) {
           setAvailableVersions(data.versions);
-          // Always set selectedVersion to the *first* version on initial load if version isn't provided.
           if (!version && data.versions.length > 0) {
             setSelectedVersion(data.versions[0]);
           }
@@ -105,8 +104,7 @@ export default function FormPage() {
           setAvailableVersions([data.version_name]);
           setSelectedVersion(data.version_name);
         }
-
-        // Build initial formData from DB data.
+        // Build initial formData.
         const initialFormData = {};
         data.sections.forEach((section) => {
           section.questions.forEach((question) => {
@@ -120,12 +118,9 @@ export default function FormPage() {
             }
           });
         });
-        // Optionally, load any saved submission from local storage.
+        // Load any saved submission from local storage.
         const savedSubmission = localStorage.getItem(
-          LOCAL_STORAGE_SUBMISSION_KEY(
-            formName,
-            version || data.version_name
-          )
+          LOCAL_STORAGE_SUBMISSION_KEY(formName, version || data.version_name)
         );
         if (savedSubmission) {
           const parsed = JSON.parse(savedSubmission);
@@ -143,27 +138,26 @@ export default function FormPage() {
   // useEffect to fetch form definition when selectedForm changes.
   useEffect(() => {
     if (selectedForm) {
-      // Fetch with selectedVersion, which will be '' initially, then updated.
       fetchFormDefinition(selectedForm, selectedVersion);
     }
   }, [selectedForm]);
 
-  // When a user selects a form.
+  // Handle form selection.
   const handleFormSelect = async (formName) => {
     setSelectedForm(formName);
-    localStorage.removeItem(LOCAL_STORAGE_VERSION_KEY(formName)); // Clear stored version on form change
+    localStorage.removeItem(LOCAL_STORAGE_VERSION_KEY(formName));
     setFormData({});
     setFileUploads({});
     setSubmitted(false);
     setCurrentSection(0);
     setIsCloning(false);
     setClonedFromVersion('');
-    setSelectedVersion(''); // Reset selectedVersion on form change
+    setSelectedVersion('');
     setAvailableVersions([]);
     await fetchFormDefinition(formName);
   };
 
-  // When a user selects an existing version.
+  // Handle version selection.
   const handleVersionSelect = async (version) => {
     setIsCloning(false);
     setClonedFromVersion('');
@@ -176,29 +170,26 @@ export default function FormPage() {
     await fetchFormDefinition(selectedForm, version);
   };
 
-  // When the user clicks "Clone Version"
+  // Clone version.
   const handleCloneVersion = () => {
-    // Save current version as source.
     setIsCloning(true);
     setClonedFromVersion(selectedVersion);
-    // Clear selectedVersion so the user can type a new one.
     setSelectedVersion('');
   };
 
-  // When the user clicks "Create New Version"
+  // Create a new version.
   const handleCreateNewVersion = () => {
     setIsCloning(true);
-    // Use a blank template by convention.
     setClonedFromVersion('BlankTemplate');
     setSelectedVersion('');
   };
 
-  // Handle input change.
+  // Handle input changes.
   const handleInputChange = (questionId, value) => {
     setFormData((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  // Append new uploaded files.
+  // Handle file uploads.
   const handleFileUpload = (questionId, files) => {
     if (files?.length) {
       setFileUploads((prev) => ({
@@ -208,18 +199,16 @@ export default function FormPage() {
     }
   };
 
-  // Send form data (for both "save" and "submit" actions).
+  // Send form data.
   const handleFormSend = async (action) => {
     setSubmitting(true);
-    setVersionNameError(''); // Clear any previous version name errors
+    setVersionNameError('');
     try {
-      // Determine if it's a rename of the *current* version.
       const isRenamingCurrentVersion =
         loadedFormDefinition &&
         selectedVersion !== loadedFormDefinition.version_name &&
         !isCloning;
 
-      // For cloning, require that a new version name is provided.
       if (isCloning && !selectedVersion) {
         alert('Please enter a new version name.');
         setSubmitting(false);
@@ -227,27 +216,21 @@ export default function FormPage() {
       }
 
       const payload = new FormData();
-      // Append text fields.
       Object.keys(formData).forEach((key) =>
         payload.append(key, formData[key])
       );
-      // Append file uploads.
       Object.keys(fileUploads).forEach((key) => {
         fileUploads[key].forEach((file) => payload.append(key, file));
       });
 
-      // Handle version parameters based on cloning, rename current, or regular save/submit.
       if (isCloning) {
-        // CLONING: create a new version from a source version.
         payload.append('version_name', clonedFromVersion);
         payload.append('new_version_name', selectedVersion);
         payload.append('form_name', selectedForm);
       } else if (isRenamingCurrentVersion) {
-        // RENAMING CURRENT VERSION: update the version name of the existing version.
         payload.append('version_name', loadedFormDefinition.version_name);
         payload.append('new_version_name', selectedVersion);
       } else {
-        // SAVE/SUBMIT: simply save changes to the current version.
         payload.append('version_name', selectedVersion);
       }
       payload.append('action', action);
@@ -266,7 +249,7 @@ export default function FormPage() {
         if (res.status === 409) {
           const errorData = await res.json();
           setVersionNameError(errorData.error || 'Version name already exists.');
-          return; // Stop submission if version name error
+          return;
         }
         throw new Error('Error sending form');
       }
@@ -277,8 +260,6 @@ export default function FormPage() {
         LOCAL_STORAGE_SUBMISSION_KEY(selectedForm, data.version_name),
         JSON.stringify(formData)
       );
-
-      // Re-fetch form definition to update version list after clone/save/submit/rename.
       setLoadedFormDefinition(data);
       if (data.versions && Array.isArray(data.versions)) {
         setAvailableVersions(data.versions);
@@ -291,7 +272,6 @@ export default function FormPage() {
         data.version_name
       );
 
-      // Explicitly re-fetch form definition with the new version from backend response.
       if (selectedForm && data.version_name) {
         await fetchFormDefinition(selectedForm, data.version_name);
       }
@@ -302,18 +282,16 @@ export default function FormPage() {
     }
   };
 
-  // Handler for submission.
   const handleSubmit = async (e) => {
     e.preventDefault();
     await handleFormSend('submit');
   };
 
-  // Handler for saving.
   const handleSave = async () => {
     await handleFormSend('save');
   };
 
-  // Render a field based on type.
+  // Render individual form fields.
   const renderFormField = (question) => {
     switch (question.type) {
       case 'text':
@@ -580,7 +558,7 @@ export default function FormPage() {
     }
   };
 
-  // Render current section with page tracker and conditional rendering.
+  // Render the current section.
   const renderSection = () => {
     if (!loadedFormDefinition) return null;
     const sections = loadedFormDefinition.sections;
@@ -620,7 +598,6 @@ export default function FormPage() {
         </div>
         <div className="space-y-4">
           {section.questions.map((question) => {
-            // Handle conditional rendering.
             if (question.conditional) {
               const { questionId, value } = question.conditional;
               const currentAnswer = formData[questionId];
@@ -637,7 +614,7 @@ export default function FormPage() {
     );
   };
 
-  // Render form content.
+  // Render the main form content.
   const renderFormContent = () => {
     if (submitted) {
       return (
@@ -677,7 +654,7 @@ export default function FormPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Form selection combo box */}
+      {/* Form selection combobox */}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" role="combobox" aria-expanded={open} className="w-[200px] justify-between">
@@ -705,9 +682,7 @@ export default function FormPage() {
                     }}
                   >
                     {form}
-                    <Check
-                      className={cn('ml-auto', comboboxValue === form ? 'opacity-100' : 'opacity-0')}
-                    />
+                    <Check className={cn('ml-auto', comboboxValue === form ? 'opacity-100' : 'opacity-0')} />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -716,7 +691,7 @@ export default function FormPage() {
         </PopoverContent>
       </Popover>
 
-      {/* Render form if selected and loaded */}
+      {/* Version selection and form controls */}
       {selectedForm && loadedFormDefinition && (
         <div className="relative border border-dashed border-gray-300 rounded-lg">
           <Card className="h-full">
@@ -748,7 +723,8 @@ export default function FormPage() {
                 {versionNameError && (
                   <p className="text-red-500 text-sm">{versionNameError}</p>
                 )}
-                {availableVersions.length > 1 && (
+                {/* Always show a version dropdown if at least one version exists */}
+                {availableVersions.length > 0 && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-40 justify-between">
@@ -766,9 +742,7 @@ export default function FormPage() {
                               <CommandItem
                                 key={version}
                                 value={version}
-                                onSelect={(val) => {
-                                  handleVersionSelect(val);
-                                }}
+                                onSelect={(val) => handleVersionSelect(val)}
                               >
                                 {version}
                                 <Check
