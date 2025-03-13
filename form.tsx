@@ -190,6 +190,14 @@
    setSelectedVersion('');
   };
 
+  // When the user clicks "Create New Version"
+  const handleCreateNewVersion = () => {
+   setIsCloning(true);
+   setClonedFromVersion('BlankTemplate'); // Clone from "BlankTemplate"
+   setSelectedVersion(''); // Clear version input for new version name
+  };
+
+
   // Handle input change.
   const handleInputChange = (questionId, value) => {
    setFormData((prev) => ({ ...prev, [questionId]: value }));
@@ -232,7 +240,7 @@
 
     // Handle version parameters based on cloning, rename current, or regular save/submit
     if (isCloning) { // CLONING: create a new version from a source version
-     payload.append('version_name', clonedFromVersion || loadedFormDefinition.version_name); // Original version name (source for clone)
+     payload.append('version_name', clonedFromVersion); // Use "BlankTemplate" or selected version for cloning source
      payload.append('new_version_name', selectedVersion); // New version name (for the *new* cloned version)
     } else if (isRenamingCurrentVersion) { // RENAMING CURRENT VERSION: update the version name of the *existing* version
      payload.append('version_name', loadedFormDefinition.version_name); // *Original* version name (to identify the version to rename)
@@ -403,7 +411,7 @@
           <div key={option} className="flex flex-col space-y-1">
            <div className="flex items-center space-x-2">
             <Checkbox
-             id={`<span class="math-inline">\{question\.id\}\-</span>{option}`}
+             id={`${question.id}-${option}`}
              checked={isChecked}
              onCheckedChange={(checked) => {
               const selected = formData[question.id] || [];
@@ -421,7 +429,7 @@
               handleInputChange(question.id, newSelected);
              }}
             />
-            <Label htmlFor={`<span class="math-inline">\{question\.id\}\-</span>{option}`}>
+            <Label htmlFor={`${question.id}-${option}`}>
              {option}
             </Label>
            </div>
@@ -462,9 +470,9 @@
          <div className="flex items-center space-x-2" key={option}>
           <RadioGroupItem
            value={option}
-           id={`<span class="math-inline">\{question\.id\}\-</span>{option}`}
+           id={`${question.id}-${option}`}
           />
-          <Label htmlFor={`<span class="math-inline">\{question\.id\}\-</span>{option}`}>
+          <Label htmlFor={`${question.id}-${option}`}>
            {option}
           </Label>
          </div>
@@ -743,6 +751,13 @@
           >
            Clone Version
           </Button>
+           <Button // **NEW: Create New Version Button**
+            size="sm"
+            variant="outline"
+            onClick={handleCreateNewVersion}
+           >
+            Create New Version
+           </Button>
          </div>
          {versionNameError && ( // Display version name error message
           <p className="text-red-500 text-sm">{versionNameError}</p>
