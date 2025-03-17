@@ -1,6 +1,5 @@
 'use client'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import CircularProgress from '@/components/circular-progress'
 
 interface Url {
@@ -17,15 +16,9 @@ interface Automation {
 
 interface AutomationCardProps {
   automation: Automation
-  onEdit: (automation: Automation) => void
-  onDelete: (id: string) => void
 }
 
-export default function AutomationCard({ 
-  automation,
-  onEdit,
-  onDelete
-}: AutomationCardProps) {
+export default function AutomationCard({ automation }: AutomationCardProps) {
   const average = automation.urls.length > 0 
     ? automation.urls.reduce((sum, url) => sum + url.percentage, 0) / automation.urls.length
     : 0
@@ -62,22 +55,6 @@ export default function AutomationCard({
           </ul>
         </div>
       </CardContent>
-      <CardFooter className="flex gap-2 p-2">
-        <Button
-          variant="outline"
-          className="flex-1 text-sm h-8"
-          onClick={() => onEdit(automation)}
-        >
-          Edit
-        </Button>
-        <Button
-          variant="destructive"
-          className="h-8"
-          onClick={() => onDelete(automation.id)}
-        >
-          Delete
-        </Button>
-      </CardFooter>
     </Card>
   )
 }
