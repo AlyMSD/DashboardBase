@@ -4,9 +4,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import CircularProgress from '@/components/circular-progress'
 
-export default function NFCard({ nf, onDelete }: { 
-  nf: any,
-  onDelete: (id: string) => void
+export default function NFCard({ nf }: { 
+  nf: any
 }) {
   const router = useRouter()
   const average = ((nf.automations || []).reduce((acc: number, automation: any) => {
@@ -30,12 +29,9 @@ export default function NFCard({ nf, onDelete }: {
         <Button 
           variant="outline" 
           className="flex-1 text-sm h-8"
-          onClick={() => router.push(`/dashboard/${nf.id}`)}
+          onClick={() => router.push(`/dashboard/${nf._id}`)}
         >
           View
-        </Button>
-        <Button variant="destructive" className="h-8" onClick={() => onDelete(nf.id)}>
-          Delete
         </Button>
       </CardFooter>
     </Card>
