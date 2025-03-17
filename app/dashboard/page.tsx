@@ -9,11 +9,12 @@ export default function DashboardPage() {
   const [nfs, setNfs] = useState<any[]>([])
   const [editNF, setEditNF] = useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const API_URL = 'http://localhost:5000/api/nfs'
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const res = await fetch('/api/nfs')
+        const res = await fetch(API_URL)
         const data = await res.json()
         setNfs(Array.isArray(data) ? data : [])
       } catch (error) {
@@ -25,7 +26,7 @@ export default function DashboardPage() {
 
   const persistNFs = async (newNFs: any[]) => {
     try {
-      await fetch('/api/nfs', {
+      await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newNFs),
@@ -48,9 +49,9 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {nfs.map((nf) => (
           <NFCard 
-            key={nf.id}
+            key={nf._id} // using _id from MongoDB
             nf={nf}
-            onDelete={(id) => persistNFs(nfs.filter(m => m.id !== id))}
+            onDelete={(id) => persistNFs(nfs.filter(m => m._id !== id))}
           />
         ))}
       </div>
@@ -59,7 +60,7 @@ export default function DashboardPage() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         initialData={editNF}
-        onSave={(nf) => persistNFs([...nfs, { ...nf, id: Date.now().toString() }])}
+        onSave={(nf) => persistNFs([...nfs, { ...nf, _id: Date.now().toString() }])}
       />
     </>
   )
