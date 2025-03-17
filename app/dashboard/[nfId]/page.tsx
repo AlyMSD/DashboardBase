@@ -15,13 +15,14 @@ export default function NFDetailsPageClient({ params }: { params: Promise<{ nfId
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const API_URL = 'http://localhost:5000/api/nfs'
 
   useEffect(() => {
     const loadNF = async () => {
       try {
-        const res = await fetch('/api/nfs');
+        const res = await fetch(API_URL);
         const data = await res.json();
-        const foundNF = data.find((n: any) => n.id.toString() === nfId);
+        const foundNF = data.find((n: any) => n._id.toString() === nfId);
         
         if (!foundNF) {
           setError(`NF with ID ${nfId} not found`);
@@ -38,17 +39,17 @@ export default function NFDetailsPageClient({ params }: { params: Promise<{ nfId
       }
     };
     loadNF();
-  }, [nfId]); // Now using nfId directly as dependency
+  }, [nfId]);
 
   const handleUpdateNF = async (updatedNF: any) => {
     try {
-      const res = await fetch('/api/nfs')
+      const res = await fetch(API_URL)
       const currentNFs = await res.json()
       const updatedNFs = currentNFs.map((n: any) =>
-        n.id.toString() === updatedNF.id.toString() ? updatedNF : n
+        n._id.toString() === updatedNF._id.toString() ? updatedNF : n
       )
       
-      await fetch('/api/nfs', {
+      await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedNFs),
@@ -90,7 +91,8 @@ export default function NFDetailsPageClient({ params }: { params: Promise<{ nfId
     handleUpdateNF(updatedNF)
   }
 
-  if (!nf) return <div>Loading...</div>
+  if (loading) return <div>Loading...</div>
+  if (error) return <div>{error}</div>
 
   return (
     <div className="space-y-6">
