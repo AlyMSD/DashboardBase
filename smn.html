@@ -62,7 +62,7 @@
         </tr>
       </thead>
       <tbody>
-        {# The macro renders objects and arrays conditionally #}
+        {# Recursive macro to render JSON #}
         {% macro render_json(data, parent_id="", parent_path="") %}
           {% for key, value in data.items() %}
             {% set current_id = parent_id ~ (parent_id != "" and "-" or "") ~ key %}
@@ -77,34 +77,27 @@
               {{ render_json(value, current_id, current_path) }}
             {% elif value is sequence and not value is string %}
               {% if value|length > 0 and value[0] is mapping %}
-                {# Render a header row for an array of objects #}
+                {# Array header row for arrays with objects #}
                 <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                   <td colspan="5">
                     <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
                     {{ current_path }} [Array]
                   </td>
                 </tr>
+                {# For each object in the array, create a container row that will expand #}
                 {% for item in value %}
                   {% set item_id = current_id ~ "-" ~ loop.index0 %}
                   {% set item_path = current_path ~ " > " ~ loop.index0 %}
-                  {% if item is mapping %}
-                    {{ render_json(item, item_id, item_path) }}
-                  {% else %}
-                    <tr data-parent="{{ current_id }}" style="display: none;">
-                      <td>
-                        <input type="checkbox" name="parameters" value="{{ item_id }}" onclick="updateAuditStatus(this)">
-                      </td>
-                      <td>{{ item_path }}</td>
-                      <td>{{ item }}</td>
-                      <td>
-                        <input type="text" name="expected_value_{{ item_id }}" value="{{ item }}" oninput="updateAuditStatus(this)">
-                      </td>
-                      <td class="status pass" id="status_{{ item_id }}">Pass</td>
-                    </tr>
-                  {% endif %}
+                  <tr class="network-function" data-id="{{ item_id }}" data-parent="{{ current_id }}" style="display: none;">
+                    <td colspan="5">
+                      <button type="button" class="toggle-btn" onclick="toggleNested('{{ item_id }}', event)">[+]</button>
+                      {{ item_path }}
+                    </td>
+                  </tr>
+                  {{ render_json(item, item_id, item_path) }}
                 {% endfor %}
               {% else %}
-                {# Array does not contain objects, render as a single row #}
+                {# Array does not contain objects – render as a simple row #}
                 <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                   <td>
                     <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
