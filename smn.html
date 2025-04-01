@@ -9,11 +9,18 @@
       font-family: 'Courier New';
       padding: 20px;
     }
+    /* Flex container for tabs and namespaces dropdown */
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
     /* Tabs styling */
     .tabs {
       list-style-type: none;
       padding: 0;
-      margin: 0 0 20px 0;
+      margin: 0;
       display: flex;
       border-bottom: 2px solid #ddd;
     }
@@ -34,10 +41,25 @@
       font-weight: bold;
       color: #000;
     }
+    /* Dropdown styling */
+    .namespace-select {
+      padding: 8px;
+      font-size: 14px;
+    }
+    /* Search box styling */
+    .search-container {
+      margin-bottom: 20px;
+    }
+    .search-box {
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
+      margin-top: 10px;
     }
     th, td {
       padding: 10px;
@@ -70,23 +92,37 @@
   </style>
 </head>
 <body>
-  <h1>JSON Viewer - {{ current_tab }}</h1>
+  <div class="header-container">
+    <!-- Tabs Navigation -->
+    <ul class="tabs">
+      {% for tab in tabs %}
+        <li>
+          <a href="/{{ tab }}" class="{% if tab == current_tab %}active{% endif %}">{{ tab }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+    
+    <!-- Namespaces Dropdown -->
+    <select class="namespace-select">
+      {% for ns in namespaces %}
+        <option value="{{ ns }}">{{ ns }}</option>
+      {% endfor %}
+    </select>
+  </div>
   
-  <!-- Tabs Navigation -->
-  <ul class="tabs">
-    {% for tab in tabs %}
-      <li>
-        <a href="/{{ tab }}" class="{% if tab == current_tab %}active{% endif %}">{{ tab }}</a>
-      </li>
-    {% endfor %}
-  </ul>
+  <!-- Search Box -->
+  <div class="search-container">
+    <input type="text" id="searchBox" class="search-box" placeholder="Search for variable names..." onkeyup="searchTable()">
+  </div>
+  
+  <h1>JSON Viewer - {{ current_tab }}</h1>
   
   <button onclick="selectAllCheckboxes()">Select All</button>
   <button onclick="expandAll()">Expand All</button>
   <button onclick="collapseAll()">Collapse All</button>
   
   <form method="post" action="/submit">
-    <table>
+    <table id="jsonTable">
       <thead>
         <tr>
           <th>Select</th>
@@ -168,6 +204,25 @@
   </form>
 
   <script>
+    // Search function: Filters rows based on text in the "Parameter" column.
+    function searchTable() {
+      const input = document.getElementById("searchBox");
+      const filter = input.value.toLowerCase();
+      const table = document.getElementById("jsonTable");
+      const rows = table.getElementsByTagName("tr");
+      for (let i = 1; i < rows.length; i++) { // Skip header row
+        const cells = rows[i].getElementsByTagName("td");
+        if (cells.length > 1) {
+          const paramText = cells[1].innerText.toLowerCase();
+          if (paramText.indexOf(filter) > -1) {
+            rows[i].style.display = "";
+          } else {
+            rows[i].style.display = "none";
+          }
+        }
+      }
+    }
+
     // Select all checkboxes
     function selectAllCheckboxes() {
       document.querySelectorAll("input[type='checkbox']").forEach(checkbox => {
