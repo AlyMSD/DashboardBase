@@ -22,7 +22,6 @@ def load_json_for_tab(tab_name):
     json_files = [f for f in os.listdir(folder_path) if f.endswith('.json')]
     if not json_files:
         return {}
-    # Here, we're choosing the first JSON file in the folder.
     file_path = os.path.join(folder_path, json_files[0])
     with open(file_path, 'r') as file:
         return json.load(file)
@@ -39,7 +38,11 @@ def index(tab=None):
     if tab not in tabs:
         abort(404)
     data = load_json_for_tab(tab)
-    return render_template('index.html', data=data, tabs=tabs, current_tab=tab)
+    
+    # An array of namespaces. (For now, these are just example values.)
+    namespaces = ["namespace1", "namespace2", "namespace3"]
+
+    return render_template('index.html', data=data, tabs=tabs, current_tab=tab, namespaces=namespaces)
 
 if __name__ == '__main__':
     app.run(debug=True)
