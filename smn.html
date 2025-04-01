@@ -62,7 +62,7 @@
         </tr>
       </thead>
       <tbody>
-        {# The macro now uses "parent_id" for toggling and "parent_path" for the label. #}
+        {# The macro renders objects and arrays conditionally #}
         {% macro render_json(data, parent_id="", parent_path="") %}
           {% for key, value in data.items() %}
             {% set current_id = parent_id ~ (parent_id != "" and "-" or "") ~ key %}
@@ -77,14 +77,13 @@
               {{ render_json(value, current_id, current_path) }}
             {% elif value is sequence and not value is string %}
               {% if value|length > 0 and value[0] is mapping %}
-                {# Render a header row for the array of objects #}
+                {# Render a header row for an array of objects #}
                 <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                   <td colspan="5">
                     <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
                     {{ current_path }} [Array]
                   </td>
                 </tr>
-                {# Iterate over each object in the array #}
                 {% for item in value %}
                   {% set item_id = current_id ~ "-" ~ loop.index0 %}
                   {% set item_path = current_path ~ " > " ~ loop.index0 %}
@@ -105,7 +104,7 @@
                   {% endif %}
                 {% endfor %}
               {% else %}
-                {# Array does not contain objects, render as a single value #}
+                {# Array does not contain objects, render as a single row #}
                 <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                   <td>
                     <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
