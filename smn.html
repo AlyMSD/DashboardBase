@@ -35,7 +35,6 @@
       font-weight: bold;
       cursor: pointer;
     }
-    /* Optional: style the toggle button */
     .toggle-btn {
       border: none;
       background: none;
@@ -47,8 +46,10 @@
 </head>
 <body>
   <h1>JSON Viewer</h1>
-  <button class="select-all" onclick="selectAllCheckboxes()">Select All</button>
-
+  <button onclick="selectAllCheckboxes()">Select All</button>
+  <button onclick="expandAll()">Expand All</button>
+  <button onclick="collapseAll()">Collapse All</button>
+  
   <form method="post" action="/submit">
     <table>
       <thead>
@@ -61,23 +62,55 @@
         </tr>
       </thead>
       <tbody>
-        {% macro render_json(data, parent_id="") %}
+        {# The macro now takes an extra parameter "parent_path" that builds the full path label #}
+        {% macro render_json(data, parent_id="", parent_path="") %}
           {% for key, value in data.items() %}
             {% set current_id = parent_id ~ (parent_id != "" and "-" or "") ~ key %}
+            {% set current_path = parent_path != "" and (parent_path ~ " > " ~ key) or key %}
             {% if value is mapping %}
               <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                 <td colspan="5">
                   <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
-                  {{ key }}
+                  {{ current_path }}
                 </td>
               </tr>
-              {{ render_json(value, current_id) }}
+              {{ render_json(value, current_id, current_path) }}
+            {% elif value is sequence %}
+              {# Render a header row for the array #}
+              <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                <td colspan="5">
+                  <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
+                  {{ current_path }} [Array]
+                </td>
+              </tr>
+              {# Iterate through array elements #}
+              {% for item in value %}
+                {% set item_id = current_id ~ "-" ~ loop.index0 %}
+                {% set item_path = current_path ~ " > " ~ loop.index0 %}
+                {% if item is mapping %}
+                  {# Render the mapping within the array #}
+                  {{ render_json(item, item_id, item_path) }}
+                {% else %}
+                  {# Render a simple value from the array #}
+                  <tr data-parent="{{ current_id }}" style="display: none;">
+                    <td>
+                      <input type="checkbox" name="parameters" value="{{ item_id }}" onclick="updateAuditStatus(this)">
+                    </td>
+                    <td>{{ item_path }}</td>
+                    <td>{{ item }}</td>
+                    <td>
+                      <input type="text" name="expected_value_{{ item_id }}" value="{{ item }}" oninput="updateAuditStatus(this)">
+                    </td>
+                    <td class="status pass" id="status_{{ item_id }}">Pass</td>
+                  </tr>
+                {% endif %}
+              {% endfor %}
             {% else %}
               <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                 <td>
                   <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
                 </td>
-                <td>{{ key }}</td>
+                <td>{{ current_path }}</td>
                 <td>{{ value }}</td>
                 <td>
                   <input type="text" name="expected_value_{{ current_id }}" value="{{ value }}" oninput="updateAuditStatus(this)">
@@ -87,7 +120,6 @@
             {% endif %}
           {% endfor %}
         {% endmacro %}
-        <!-- Render the top-level JSON (which is always visible) -->
         {{ render_json(data) }}
       </tbody>
     </table>
@@ -96,12 +128,10 @@
   </form>
 
   <script>
-    // Function to select/unselect all checkboxes
+    // Function to select all checkboxes
     function selectAllCheckboxes() {
       const checkboxes = document.querySelectorAll("input[type='checkbox']");
-      checkboxes.forEach(checkbox => {
-        checkbox.checked = true;
-      });
+      checkboxes.forEach(checkbox => checkbox.checked = true);
     }
 
     // Function to update audit status based on the expected value
@@ -122,20 +152,17 @@
       }
     }
 
-    // Toggle function for expandable/collapsible rows.
+    // Toggle function for expandable/collapsible rows
     function toggleNested(id, event) {
       event.stopPropagation();
-      // Get rows that are immediate children of the current id.
       const childRows = document.querySelectorAll('tr[data-parent="'+ id +'"]');
       childRows.forEach(row => {
         if (row.style.display === "none") {
           row.style.display = "";
         } else {
-          // If collapsing, also collapse any nested children.
           collapseRows(row);
         }
       });
-      // Toggle the button text.
       const button = event.currentTarget;
       button.innerText = button.innerText === "[+]" ? "[-]" : "[+]";
     }
@@ -145,17 +172,27 @@
       row.style.display = "none";
       const childId = row.getAttribute("data-id");
       if (childId) {
-        // Reset the toggle button text if it exists.
         const btn = row.querySelector(".toggle-btn");
         if (btn) {
           btn.innerText = "[+]";
         }
-        // Collapse all children of this row.
         const nestedRows = document.querySelectorAll('tr[data-parent="'+ childId +'"]');
-        nestedRows.forEach(nestedRow => {
-          collapseRows(nestedRow);
-        });
+        nestedRows.forEach(nestedRow => collapseRows(nestedRow));
       }
+    }
+
+    // Expand all nested rows and update toggle button text.
+    function expandAll() {
+      const rows = document.querySelectorAll('tr[data-parent]');
+      rows.forEach(row => row.style.display = "");
+      document.querySelectorAll('.toggle-btn').forEach(btn => btn.innerText = "[-]");
+    }
+
+    // Collapse all nested rows and update toggle button text.
+    function collapseAll() {
+      const rows = document.querySelectorAll('tr[data-parent]');
+      rows.forEach(row => row.style.display = "none");
+      document.querySelectorAll('.toggle-btn').forEach(btn => btn.innerText = "[+]");
     }
   </script>
 </body>
