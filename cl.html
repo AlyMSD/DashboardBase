@@ -15,10 +15,6 @@
       align-items: center;
       margin-bottom: 10px;
     }
-    .tabs-container {
-      display: flex;
-      align-items: center;
-    }
     .tabs {
       list-style-type: none;
       padding: 0;
@@ -47,14 +43,6 @@
     .tabs li a.fail-tab {
       background-color: #f8d7da;
       color: red;
-    }
-    .home-button {
-      margin-right: 20px;
-      padding: 10px 15px;
-      background-color: #007bff;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 5px;
     }
     .namespace-select {
       padding: 8px;
@@ -106,16 +94,16 @@
 </head>
 <body>
   <div class="header-container">
-    <div class="tabs-container">
-      <a href="dashboard.html" class="home-button">Home</a>
-      <ul class="tabs">
-        {% for tab in tabs %}
-          <li>
-            <a href="/{{ tab }}" class="{% if tab == current_tab %}active{% endif %}">{{ tab }}</a>
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
+    <ul class="tabs">
+      <li>
+        <a href="{{ url_for('index') }}" class="{% if current_tab == 'Home' %}active{% endif %}">Home</a>
+      </li>
+      {% for tab in tabs %}
+        <li>
+          <a href="/{{ tab }}" class="{% if tab == current_tab %}active{% endif %}">{{ tab }}</a>
+        </li>
+      {% endfor %}
+    </ul>
     <select class="namespace-select">
       {% for ns in namespaces %}
         <option value="{{ ns }}">{{ ns }}</option>
