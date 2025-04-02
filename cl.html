@@ -15,6 +15,10 @@
       align-items: center;
       margin-bottom: 10px;
     }
+    .tabs-container {
+      display: flex;
+      align-items: center;
+    }
     .tabs {
       list-style-type: none;
       padding: 0;
@@ -38,6 +42,19 @@
       background-color: #f4f4f4;
       font-weight: bold;
       color: #000;
+    }
+    /* New style for a failed tab */
+    .tabs li a.fail-tab {
+      background-color: #f8d7da;
+      color: red;
+    }
+    .home-button {
+      margin-right: 20px;
+      padding: 10px 15px;
+      background-color: #007bff;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 5px;
     }
     .namespace-select {
       padding: 8px;
@@ -89,13 +106,16 @@
 </head>
 <body>
   <div class="header-container">
-    <ul class="tabs">
-      {% for tab in tabs %}
-        <li>
-          <a href="/{{ tab }}" class="{% if tab == current_tab %}active{% endif %}">{{ tab }}</a>
-        </li>
-      {% endfor %}
-    </ul>
+    <div class="tabs-container">
+      <a href="dashboard.html" class="home-button">Home</a>
+      <ul class="tabs">
+        {% for tab in tabs %}
+          <li>
+            <a href="/{{ tab }}" class="{% if tab == current_tab %}active{% endif %}">{{ tab }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
     <select class="namespace-select">
       {% for ns in namespaces %}
         <option value="{{ ns }}">{{ ns }}</option>
@@ -227,6 +247,8 @@
         statusCell.classList.remove('pass');
         statusCell.classList.add('fail');
       }
+      // Check the overall tab status after updating
+      checkTabStatus();
     }
 
     function toggleNested(id, event) {
@@ -267,6 +289,32 @@
       });
       document.querySelectorAll('.toggle-btn').forEach(btn => btn.innerText = "[+]");
     }
+
+    // Function to check if any audit status in the table is Fail
+    function checkTabStatus() {
+      const tableRows = document.querySelectorAll("#jsonTable tbody tr");
+      let hasFail = false;
+      tableRows.forEach(row => {
+        const statusCell = row.querySelector(".status");
+        if (statusCell && statusCell.innerText.trim() === "Fail") {
+          hasFail = true;
+        }
+      });
+      // Find the active tab and update its class based on audit status
+      const currentTabAnchor = document.querySelector(".tabs li a.active");
+      if (currentTabAnchor) {
+        if (hasFail) {
+          currentTabAnchor.classList.add("fail-tab");
+        } else {
+          currentTabAnchor.classList.remove("fail-tab");
+        }
+      }
+    }
+
+    // Check tab status on initial page load
+    document.addEventListener("DOMContentLoaded", function() {
+      checkTabStatus();
+    });
   </script>
 </body>
 </html>
