@@ -8,19 +8,13 @@
     body {
       font-family: 'Courier New', monospace;
       padding: 20px;
-      color: #333;
-      line-height: 1.5;
     }
-    /* Header container */
+    /* Flex container for tabs and namespaces dropdown */
     .header-container {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
-      background-color: #f8f9fa;
-      padding: 10px;
-      border-radius: 5px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 10px;
     }
     /* Tabs styling */
     .tabs {
@@ -41,22 +35,16 @@
       border: 1px solid #ddd;
       border-bottom: none;
       border-radius: 5px 5px 0 0;
-      transition: background-color 0.2s;
-    }
-    .tabs li a:hover {
-      background-color: #e9ecef;
     }
     .tabs li a.active {
-      background-color: #007bff;
-      color: white;
+      background-color: #f4f4f4;
       font-weight: bold;
+      color: #000;
     }
     /* Dropdown styling */
     .namespace-select {
       padding: 8px;
       font-size: 14px;
-      border-radius: 4px;
-      border: 1px solid #ced4da;
     }
     /* Search box styling */
     .search-container {
@@ -64,123 +52,58 @@
     }
     .search-box {
       width: 100%;
-      padding: 10px;
+      padding: 8px;
       font-size: 14px;
-      border-radius: 4px;
-      border: 1px solid #ced4da;
       box-sizing: border-box;
     }
-    /* Controls container */
-    .controls-container {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-    .control-btn {
-      background-color: #f8f9fa;
-      border: 1px solid #ced4da;
-      padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .control-btn:hover {
-      background-color: #e9ecef;
-    }
-    /* Table styling */
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
-      table-layout: fixed;
     }
     th, td {
       padding: 10px;
-      border: 1px solid #dee2e6;
+      border: 1px solid #ddd;
       text-align: left;
-      word-wrap: break-word;
+      vertical-align: top;
     }
     th {
-      background-color: #f8f9fa;
-      position: sticky;
-      top: 0;
+      background-color: #f4f4f4;
     }
-    /* Column widths for better layout */
-    th:nth-child(1), td:nth-child(1) { width: 5%; }
-    th:nth-child(2), td:nth-child(2) { width: 25%; }
-    th:nth-child(3), td:nth-child(3) { width: 25%; }
-    th:nth-child(4), td:nth-child(4) { width: 30%; }
-    th:nth-child(5), td:nth-child(5) { width: 15%; }
-    
     .pass {
       background-color: #d4edda;
-      color: #155724;
-      padding: 5px;
-      border-radius: 3px;
+      color: green;
     }
     .fail {
       background-color: #f8d7da;
-      color: #721c24;
-      padding: 5px;
-      border-radius: 3px;
+      color: red;
     }
-    /* JSON structure visualization */
-    .json-node {
-      background-color: #f8f9fa;
-      border-left: 3px solid #007bff;
+    .network-function {
+      background-color: #f0f0f0;
+      font-weight: bold;
       cursor: pointer;
     }
-    .json-object {
-      background-color: #e9f5ff;
-      border-left: 3px solid #007bff;
-    }
-    .json-array {
-      background-color: #fff5e6;
-      border-left: 3px solid #fd7e14;
-    }
-    .json-array-item {
-      background-color: #fff9ed;
-      border-left: 3px solid #ffc107;
-    }
-    /* Nested level indentation */
-    .level-0 { padding-left: 10px; }
-    .level-1 { padding-left: 20px; }
-    .level-2 { padding-left: 30px; }
-    .level-3 { padding-left: 40px; }
-    .level-4 { padding-left: 50px; }
-    .level-5 { padding-left: 60px; }
-    
     .toggle-btn {
       border: none;
       background: none;
       font-weight: bold;
       cursor: pointer;
       margin-right: 5px;
-      width: 25px;
-      height: 25px;
-      color: #007bff;
-      border-radius: 50%;
-      transition: background-color 0.2s;
     }
-    .toggle-btn:hover {
-      background-color: #e9ecef;
+    /* JSON specific styles */
+    .json-key {
+      font-weight: bold;
     }
-    /* Path breadcrumb */
-    .json-path {
-      color: #495057;
-      font-family: 'Consolas', monospace;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .json-value {
+      white-space: pre-wrap;
+      word-break: break-all;
     }
-    /* Type indicators */
-    .type-indicator {
-      font-size: 12px;
-      color: #6c757d;
-      background-color: #f1f3f5;
-      padding: 2px 5px;
-      border-radius: 3px;
-      margin-left: 5px;
+    textarea {
+      width: 100%;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      resize: vertical;
+      box-sizing: border-box;
     }
   </style>
 </head>
@@ -205,17 +128,14 @@
   
   <!-- Search Box -->
   <div class="search-container">
-    <input type="text" id="searchBox" class="search-box" placeholder="Search for parameter paths, keys, or values..." onkeyup="searchTable()">
+    <input type="text" id="searchBox" class="search-box" placeholder="Search for variable names..." onkeyup="searchTable()">
   </div>
   
-  <h1>JSON Structure Viewer - {{ current_tab }}</h1>
+  <h1>JSON Viewer - {{ current_tab }}</h1>
   
-  <div class="controls-container">
-    <button class="control-btn" onclick="selectAllCheckboxes()">Select All</button>
-    <button class="control-btn" onclick="expandAll()">Expand All</button>
-    <button class="control-btn" onclick="collapseAll()">Collapse All</button>
-    <button class="control-btn" onclick="copyAsJSON()">Copy as JSON</button>
-  </div>
+  <button onclick="selectAllCheckboxes()">Select All</button>
+  <button onclick="expandAll()">Expand All</button>
+  <button onclick="collapseAll()">Collapse All</button>
   
   <form method="post" action="/submit">
     <table id="jsonTable">
@@ -229,107 +149,66 @@
         </tr>
       </thead>
       <tbody>
-        {# Recursive macro to render JSON #}
-        {% macro render_json(data, parent_id="", parent_path="", level=0) %}
+        {# Recursive macro to render JSON with indentation based on nesting depth #}
+        {% macro render_json(data, parent_id="", depth=0) %}
           {% for key, value in data.items() %}
             {% set current_id = parent_id ~ (parent_id != "" and "-" or "") ~ key %}
-            {% set current_path = parent_path != "" and (parent_path ~ " > " ~ key) or key %}
             {% if value is mapping %}
-              <tr class="json-node json-object level-{{ level }}" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
-                <td colspan="5" class="level-{{ level }}">
+              <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                <td colspan="5">
                   <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
-                  <span class="json-path">{{ current_path }}</span>
-                  <span class="type-indicator">Object</span>
-                  <span class="type-indicator">{{ value|length }} keys</span>
+                  <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }}</span>
                 </td>
               </tr>
-              {{ render_json(value, current_id, current_path, level + 1) }}
-            {% elif value is sequence and value is not string and value|length > 0 %}
-              {% if value[0] is mapping %}
-                {# Array header row for arrays with objects #}
-                <tr class="json-node json-array level-{{ level }}" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
-                  <td colspan="5" class="level-{{ level }}">
+              {{ render_json(value, current_id, depth + 1) }}
+            {% elif value is sequence and not value is string %}
+              {% if value|length > 0 and value[0] is mapping %}
+                <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                  <td colspan="5">
                     <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
-                    <span class="json-path">{{ current_path }}</span>
-                    <span class="type-indicator">Array</span>
-                    <span class="type-indicator">{{ value|length }} items</span>
+                    <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }} [Array]</span>
                   </td>
                 </tr>
-                {# For each object in the array, create a container row that will expand #}
                 {% for item in value %}
                   {% set item_id = current_id ~ "-" ~ loop.index0 %}
-                  {% set item_path = current_path ~ "[" ~ loop.index0 ~ "]" %}
-                  <tr class="json-node json-array-item level-{{ level + 1 }}" data-id="{{ item_id }}" data-parent="{{ current_id }}" style="display: none;">
-                    <td colspan="5" class="level-{{ level + 1 }}">
+                  <tr class="network-function" data-id="{{ item_id }}" data-parent="{{ current_id }}" style="display: none;">
+                    <td colspan="5">
                       <button type="button" class="toggle-btn" onclick="toggleNested('{{ item_id }}', event)">[+]</button>
-                      <span class="json-path">{{ item_path }}</span>
-                      <span class="type-indicator">Object</span>
-                      <span class="type-indicator">{{ item|length }} keys</span>
+                      <span style="padding-left: {{ (depth + 1) * 20 }}px;">{{ loop.index0 }}</span>
                     </td>
                   </tr>
-                  {{ render_json(item, item_id, item_path, level + 2) }}
+                  {{ render_json(item, item_id, depth + 2) }}
                 {% endfor %}
               {% else %}
-                {# Array of primitives #}
-                <tr class="json-node json-array level-{{ level }}" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
-                  <td colspan="5" class="level-{{ level }}">
-                    <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
-                    <span class="json-path">{{ current_path }}</span>
-                    <span class="type-indicator">Array</span>
-                    <span class="type-indicator">{{ value|length }} primitives</span>
+                <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                  <td>
+                    <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
                   </td>
+                  <td>
+                    <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }}</span>
+                  </td>
+                  <td>
+                    <span class="json-value">{{ value }}</span>
+                  </td>
+                  <td>
+                    <textarea name="expected_value_{{ current_id }}" oninput="updateAuditStatus(this)">{{ value }}</textarea>
+                  </td>
+                  <td class="status pass" id="status_{{ current_id }}">Pass</td>
                 </tr>
-                {% for item in value %}
-                  {% set item_id = current_id ~ "-" ~ loop.index0 %}
-                  {% set item_path = current_path ~ "[" ~ loop.index0 ~ "]" %}
-                  <tr class="level-{{ level + 1 }}" data-parent="{{ current_id }}" style="display: none;">
-                    <td>
-                      <input type="checkbox" name="parameters" value="{{ item_id }}" onclick="updateAuditStatus(this)">
-                    </td>
-                    <td class="level-{{ level + 1 }}">
-                      <span class="json-path">{{ item_path }}</span>
-                    </td>
-                    <td><pre>{{ item }}</pre></td>
-                    <td>
-                      <input type="text" name="expected_value_{{ item_id }}" value="{{ item }}" oninput="updateAuditStatus(this)">
-                    </td>
-                    <td class="status pass" id="status_{{ item_id }}">Pass</td>
-                  </tr>
-                {% endfor %}
               {% endif %}
-            {% elif value is sequence and value is not string %}
-              {# Empty array #}
+            {% else %}
               <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                 <td>
                   <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
                 </td>
-                <td class="level-{{ level }}">
-                  <span class="json-path">{{ current_path }}</span>
-                  <span class="type-indicator">Empty Array</span>
-                </td>
-                <td><pre>[]</pre></td>
                 <td>
-                  <input type="text" name="expected_value_{{ current_id }}" value="[]" oninput="updateAuditStatus(this)">
+                  <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }}</span>
                 </td>
-                <td class="status pass" id="status_{{ current_id }}">Pass</td>
-              </tr>
-            {% else %}
-              {# Primitive value #}
-              <tr class="level-{{ level }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                 <td>
-                  <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
+                  <span class="json-value">{{ value }}</span>
                 </td>
-                <td class="level-{{ level }}">
-                  <span class="json-path">{{ current_path }}</span>
-                  <span class="type-indicator">
-                    {% if value is string %}String{% elif value is number %}Number
-                    {% elif value is boolean %}Boolean{% elif value is none %}Null
-                    {% else %}Unknown{% endif %}
-                  </span>
-                </td>
-                <td><pre>{{ value }}</pre></td>
                 <td>
-                  <input type="text" name="expected_value_{{ current_id }}" value="{{ value }}" oninput="updateAuditStatus(this)">
+                  <textarea name="expected_value_{{ current_id }}" oninput="updateAuditStatus(this)">{{ value }}</textarea>
                 </td>
                 <td class="status pass" id="status_{{ current_id }}">Pass</td>
               </tr>
@@ -340,73 +219,21 @@
       </tbody>
     </table>
     <br>
-    <button type="submit" class="control-btn" style="background-color: #007bff; color: white; padding: 10px 15px;">Submit Audit</button>
+    <input type="submit" value="Submit Audit">
   </form>
 
   <script>
-    // Search function: Filters rows based on parameter path or value
+    // Search function: Filters rows based on text in the "Parameter" column.
     function searchTable() {
       const input = document.getElementById("searchBox");
       const filter = input.value.toLowerCase();
       const table = document.getElementById("jsonTable");
       const rows = table.getElementsByTagName("tr");
-      
-      // Reset display for all rows
-      for (let i = 1; i < rows.length; i++) {
-        rows[i].classList.remove('search-match');
-        rows[i].classList.remove('search-visible');
-      }
-      
-      // First pass: Mark direct matches
-      for (let i = 1; i < rows.length; i++) {
+      for (let i = 1; i < rows.length; i++) { // Skip header row
         const cells = rows[i].getElementsByTagName("td");
-        let match = false;
-        
-        // Check all cells in the row
-        for (let j = 0; j < cells.length; j++) {
-          if (cells[j].textContent.toLowerCase().includes(filter)) {
-            match = true;
-            break;
-          }
-        }
-        
-        if (match) {
-          rows[i].classList.add('search-match');
-          // Make all parent rows visible
-          let parentId = rows[i].getAttribute("data-parent");
-          while (parentId) {
-            const parentRows = document.querySelectorAll(`tr[data-id="${parentId}"]`);
-            if (parentRows.length > 0) {
-              parentRows[0].classList.add('search-visible');
-              parentId = parentRows[0].getAttribute("data-parent");
-            } else {
-              break;
-            }
-          }
-        }
-      }
-      
-      // Second pass: Show matched rows and their necessary parents
-      for (let i = 1; i < rows.length; i++) {
-        if (filter === "") {
-          // When search is cleared, reset to default state
-          const parentId = rows[i].getAttribute("data-parent");
-          if (!parentId) {
-            rows[i].style.display = "";
-          } else {
-            rows[i].style.display = "none";
-          }
-          // Reset all toggle buttons
-          document.querySelectorAll('.toggle-btn').forEach(btn => btn.innerText = "[+]");
-        } else if (rows[i].classList.contains('search-match') || rows[i].classList.contains('search-visible')) {
-          rows[i].style.display = "";
-          // Expand parent buttons
-          if (rows[i].classList.contains('json-node')) {
-            const btn = rows[i].querySelector(".toggle-btn");
-            if (btn) btn.innerText = "[-]";
-          }
-        } else {
-          rows[i].style.display = "none";
+        if (cells.length > 1) {
+          const paramText = cells[1].innerText.toLowerCase();
+          rows[i].style.display = paramText.indexOf(filter) > -1 ? "" : "none";
         }
       }
     }
@@ -415,19 +242,16 @@
     function selectAllCheckboxes() {
       document.querySelectorAll("input[type='checkbox']").forEach(checkbox => {
         checkbox.checked = true;
-        updateAuditStatus(checkbox);
       });
     }
 
     // Update audit status based on expected value
     function updateAuditStatus(inputElement) {
       const row = inputElement.closest("tr");
-      const valueCell = row.querySelector("td:nth-child(3)").textContent.trim();
-      const expectedInput = row.querySelector("input[type='text']");
-      const expectedValue = expectedInput ? expectedInput.value : "";
+      const valueCell = row.querySelector("td:nth-child(3)").innerText;
+      const expectedValueElement = row.querySelector("textarea") || row.querySelector("input[type='text']");
+      const expectedValue = expectedValueElement.value;
       const statusCell = row.querySelector(".status");
-      
-      if (!statusCell) return;
 
       if (valueCell === expectedValue) {
         statusCell.innerText = 'Pass';
@@ -443,36 +267,29 @@
     // Toggle nested rows on/off
     function toggleNested(id, event) {
       event.stopPropagation();
-      const parentRow = document.querySelector(`tr[data-id="${id}"]`);
-      const childRows = document.querySelectorAll(`tr[data-parent="${id}"]`);
-      const button = event.currentTarget;
-      
-      if (button.innerText === "[+]") {
-        // Expanding
-        childRows.forEach(row => {
+      const childRows = document.querySelectorAll('tr[data-parent="'+ id +'"]');
+      childRows.forEach(row => {
+        if (row.style.display === "none") {
           row.style.display = "";
-        });
-        button.innerText = "[-]";
-      } else {
-        // Collapsing
-        childRows.forEach(row => {
-          collapseRow(row);
-        });
-        button.innerText = "[+]";
-      }
+        } else {
+          collapseRows(row);
+        }
+      });
+      const button = event.currentTarget;
+      button.innerText = button.innerText === "[+]" ? "[-]" : "[+]";
     }
 
-    // Recursively collapse a row and all its children
-    function collapseRow(row) {
+    // Recursively collapse rows and reset toggle button text.
+    function collapseRows(row) {
       row.style.display = "none";
-      const rowId = row.getAttribute("data-id");
-      if (rowId) {
+      const childId = row.getAttribute("data-id");
+      if (childId) {
         const btn = row.querySelector(".toggle-btn");
         if (btn) {
           btn.innerText = "[+]";
         }
-        const childRows = document.querySelectorAll(`tr[data-parent="${rowId}"]`);
-        childRows.forEach(childRow => collapseRow(childRow));
+        const nestedRows = document.querySelectorAll('tr[data-parent="'+ childId +'"]');
+        nestedRows.forEach(nestedRow => collapseRows(nestedRow));
       }
     }
 
@@ -487,35 +304,9 @@
     // Collapse all nested rows and update toggle buttons
     function collapseAll() {
       document.querySelectorAll('tr[data-parent]').forEach(row => {
-        if (row.getAttribute("data-parent")) {
-          row.style.display = "none";
-        }
+        row.style.display = "none";
       });
       document.querySelectorAll('.toggle-btn').forEach(btn => btn.innerText = "[+]");
-    }
-    
-    // Function to copy the current JSON structure to clipboard
-    function copyAsJSON() {
-      // Build JSON object from the table
-      const jsonObj = buildJSONFromTable();
-      const jsonStr = JSON.stringify(jsonObj, null, 2);
-      
-      // Create temporary textarea to copy the JSON
-      const textarea = document.createElement('textarea');
-      textarea.value = jsonStr;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      
-      alert('JSON copied to clipboard!');
-    }
-    
-    // Build JSON object from the table structure
-    function buildJSONFromTable() {
-      // Implementation would build JSON from the table's current structure
-      // This is a placeholder - real implementation would need to traverse the table
-      return {};
     }
   </script>
 </body>
