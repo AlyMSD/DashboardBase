@@ -6,17 +6,15 @@
   <title>JSON Viewer - {{ current_tab }}</title>
   <style>
     body {
-      font-family: 'Courier New', monospace;
+      font-family: 'Courier New';
       padding: 20px;
     }
-    /* Flex container for tabs and namespaces dropdown */
     .header-container {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
     }
-    /* Tabs styling */
     .tabs {
       list-style-type: none;
       padding: 0;
@@ -41,12 +39,10 @@
       font-weight: bold;
       color: #000;
     }
-    /* Dropdown styling */
     .namespace-select {
       padding: 8px;
       font-size: 14px;
     }
-    /* Search box styling */
     .search-container {
       margin-bottom: 20px;
     }
@@ -65,7 +61,6 @@
       padding: 10px;
       border: 1px solid #ddd;
       text-align: left;
-      vertical-align: top;
     }
     th {
       background-color: #f4f4f4;
@@ -90,26 +85,10 @@
       cursor: pointer;
       margin-right: 5px;
     }
-    /* JSON specific styles */
-    .json-key {
-      font-weight: bold;
-    }
-    .json-value {
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    textarea {
-      width: 100%;
-      font-family: 'Courier New', monospace;
-      font-size: 14px;
-      resize: vertical;
-      box-sizing: border-box;
-    }
   </style>
 </head>
 <body>
   <div class="header-container">
-    <!-- Tabs Navigation -->
     <ul class="tabs">
       {% for tab in tabs %}
         <li>
@@ -117,8 +96,6 @@
         </li>
       {% endfor %}
     </ul>
-    
-    <!-- Namespaces Dropdown -->
     <select class="namespace-select">
       {% for ns in namespaces %}
         <option value="{{ ns }}">{{ ns }}</option>
@@ -126,7 +103,6 @@
     </select>
   </div>
   
-  <!-- Search Box -->
   <div class="search-container">
     <input type="text" id="searchBox" class="search-box" placeholder="Search for variable names..." onkeyup="searchTable()">
   </div>
@@ -149,66 +125,59 @@
         </tr>
       </thead>
       <tbody>
-        {# Recursive macro to render JSON with indentation based on nesting depth #}
-        {% macro render_json(data, parent_id="", depth=0) %}
+        {% macro render_json(data, parent_id="", parent_path="", depth=0) %}
           {% for key, value in data.items() %}
             {% set current_id = parent_id ~ (parent_id != "" and "-" or "") ~ key %}
+            {% set current_fullpath = parent_path ~ (parent_path != "" and " > " or "") ~ key %}
             {% if value is mapping %}
-              <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
-                <td colspan="5">
+              <tr class="network-function" data-id="{{ current_id }}" data-fullpath="{{ current_fullpath }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                <td colspan="5" style="padding-left: {{ depth * 20 }}px;">
                   <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
-                  <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }}</span>
+                  {{ key }}
                 </td>
               </tr>
-              {{ render_json(value, current_id, depth + 1) }}
+              {{ render_json(value, current_id, current_fullpath, depth + 1) }}
             {% elif value is sequence and not value is string %}
               {% if value|length > 0 and value[0] is mapping %}
-                <tr class="network-function" data-id="{{ current_id }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
-                  <td colspan="5">
+                <tr class="network-function" data-id="{{ current_id }}" data-fullpath="{{ current_fullpath }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                  <td colspan="5" style="padding-left: {{ depth * 20 }}px;">
                     <button type="button" class="toggle-btn" onclick="toggleNested('{{ current_id }}', event)">[+]</button>
-                    <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }} [Array]</span>
+                    {{ key }} (Array of {{ value|length }} items)
                   </td>
                 </tr>
                 {% for item in value %}
                   {% set item_id = current_id ~ "-" ~ loop.index0 %}
-                  <tr class="network-function" data-id="{{ item_id }}" data-parent="{{ current_id }}" style="display: none;">
-                    <td colspan="5">
+                  {% set item_fullpath = current_fullpath ~ " > " ~ loop.index0 %}
+                  <tr class="network-function" data-id="{{ item_id }}" data-fullpath="{{ item_fullpath }}" data-parent="{{ current_id }}" style="display: none;">
+                    <td colspan="5" style="padding-left: {{ (depth + 1) * 20 }}px;">
                       <button type="button" class="toggle-btn" onclick="toggleNested('{{ item_id }}', event)">[+]</button>
-                      <span style="padding-left: {{ (depth + 1) * 20 }}px;">{{ loop.index0 }}</span>
+                      {{ key }}[{{ loop.index0 }}]
                     </td>
                   </tr>
-                  {{ render_json(item, item_id, depth + 2) }}
+                  {{ render_json(item, item_id, item_fullpath, depth + 1) }}
                 {% endfor %}
               {% else %}
-                <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+                <tr data-fullpath="{{ current_fullpath }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                   <td>
                     <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
                   </td>
+                  <td style="padding-left: {{ depth * 20 }}px;">{{ key }}</td>
+                  <td>{{ value }}</td>
                   <td>
-                    <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }}</span>
-                  </td>
-                  <td>
-                    <span class="json-value">{{ value }}</span>
-                  </td>
-                  <td>
-                    <textarea name="expected_value_{{ current_id }}" oninput="updateAuditStatus(this)">{{ value }}</textarea>
+                    <input type="text" name="expected_value_{{ current_id }}" value="{{ value }}" oninput="updateAuditStatus(this)">
                   </td>
                   <td class="status pass" id="status_{{ current_id }}">Pass</td>
                 </tr>
               {% endif %}
             {% else %}
-              <tr {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
+              <tr data-fullpath="{{ current_fullpath }}" {% if parent_id != "" %}data-parent="{{ parent_id }}" style="display: none;"{% endif %}>
                 <td>
                   <input type="checkbox" name="parameters" value="{{ current_id }}" onclick="updateAuditStatus(this)">
                 </td>
+                <td style="padding-left: {{ depth * 20 }}px;">{{ key }}</td>
+                <td>{{ value }}</td>
                 <td>
-                  <span class="json-key" style="padding-left: {{ depth * 20 }}px;">{{ key }}</span>
-                </td>
-                <td>
-                  <span class="json-value">{{ value }}</span>
-                </td>
-                <td>
-                  <textarea name="expected_value_{{ current_id }}" oninput="updateAuditStatus(this)">{{ value }}</textarea>
+                  <input type="text" name="expected_value_{{ current_id }}" value="{{ value }}" oninput="updateAuditStatus(this)">
                 </td>
                 <td class="status pass" id="status_{{ current_id }}">Pass</td>
               </tr>
@@ -223,36 +192,32 @@
   </form>
 
   <script>
-    // Search function: Filters rows based on text in the "Parameter" column.
     function searchTable() {
       const input = document.getElementById("searchBox");
       const filter = input.value.toLowerCase();
       const table = document.getElementById("jsonTable");
       const rows = table.getElementsByTagName("tr");
-      for (let i = 1; i < rows.length; i++) { // Skip header row
-        const cells = rows[i].getElementsByTagName("td");
-        if (cells.length > 1) {
-          const paramText = cells[1].innerText.toLowerCase();
-          rows[i].style.display = paramText.indexOf(filter) > -1 ? "" : "none";
+      for (let i = 1; i < rows.length; i++) {
+        const fullpath = rows[i].getAttribute("data-fullpath");
+        if (fullpath && fullpath.toLowerCase().indexOf(filter) > -1) {
+          rows[i].style.display = "";
+        } else {
+          rows[i].style.display = "none";
         }
       }
     }
 
-    // Select all checkboxes
     function selectAllCheckboxes() {
       document.querySelectorAll("input[type='checkbox']").forEach(checkbox => {
         checkbox.checked = true;
       });
     }
 
-    // Update audit status based on expected value
     function updateAuditStatus(inputElement) {
       const row = inputElement.closest("tr");
       const valueCell = row.querySelector("td:nth-child(3)").innerText;
-      const expectedValueElement = row.querySelector("textarea") || row.querySelector("input[type='text']");
-      const expectedValue = expectedValueElement.value;
+      const expectedValue = row.querySelector("input[type='text']").value;
       const statusCell = row.querySelector(".status");
-
       if (valueCell === expectedValue) {
         statusCell.innerText = 'Pass';
         statusCell.classList.remove('fail');
@@ -264,10 +229,9 @@
       }
     }
 
-    // Toggle nested rows on/off
     function toggleNested(id, event) {
       event.stopPropagation();
-      const childRows = document.querySelectorAll('tr[data-parent="'+ id +'"]');
+      const childRows = document.querySelectorAll('tr[data-parent="' + id + '"]');
       childRows.forEach(row => {
         if (row.style.display === "none") {
           row.style.display = "";
@@ -279,21 +243,17 @@
       button.innerText = button.innerText === "[+]" ? "[-]" : "[+]";
     }
 
-    // Recursively collapse rows and reset toggle button text.
     function collapseRows(row) {
       row.style.display = "none";
       const childId = row.getAttribute("data-id");
       if (childId) {
         const btn = row.querySelector(".toggle-btn");
-        if (btn) {
-          btn.innerText = "[+]";
-        }
-        const nestedRows = document.querySelectorAll('tr[data-parent="'+ childId +'"]');
+        if (btn) btn.innerText = "[+]";
+        const nestedRows = document.querySelectorAll('tr[data-parent="' + childId + '"]');
         nestedRows.forEach(nestedRow => collapseRows(nestedRow));
       }
     }
 
-    // Expand all nested rows and update toggle buttons
     function expandAll() {
       document.querySelectorAll('tr[data-parent]').forEach(row => {
         row.style.display = "";
@@ -301,7 +261,6 @@
       document.querySelectorAll('.toggle-btn').forEach(btn => btn.innerText = "[-]");
     }
 
-    // Collapse all nested rows and update toggle buttons
     function collapseAll() {
       document.querySelectorAll('tr[data-parent]').forEach(row => {
         row.style.display = "none";
