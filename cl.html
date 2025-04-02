@@ -44,59 +44,14 @@
       background-color: #f8d7da;
       color: red;
     }
-    .namespace-select {
-      padding: 8px;
-      font-size: 14px;
-    }
-    .search-container {
-      margin-bottom: 20px;
-    }
-    .search-box {
-      width: 100%;
-      padding: 8px;
-      font-size: 14px;
-      box-sizing: border-box;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      padding: 10px;
-      border: 1px solid #ddd;
-      text-align: left;
-    }
-    th {
-      background-color: #f4f4f4;
-    }
-    .pass {
-      background-color: #d4edda;
-      color: green;
-    }
-    .fail {
-      background-color: #f8d7da;
-      color: red;
-    }
-    .network-function {
-      background-color: #f0f0f0;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .toggle-btn {
-      border: none;
-      background: none;
-      font-weight: bold;
-      cursor: pointer;
-      margin-right: 5px;
-    }
   </style>
 </head>
 <body>
   <div class="header-container">
     <ul class="tabs">
       <li>
-        <a href="{{ url_for('index') }}" class="{% if current_tab == 'Home' %}active{% endif %}">Home</a>
+        <!-- Make sure your Flask route is named 'dashboard'; otherwise update accordingly -->
+        <a href="{{ url_for('dashboard') }}" class="{% if current_tab == 'Home' %}active{% endif %}">Home</a>
       </li>
       {% for tab in tabs %}
         <li>
