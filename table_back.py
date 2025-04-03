@@ -1,38 +1,48 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pymongo import MongoClient
+from collections import defaultdict
 
 app = Flask(__name__)
 CORS(app)
 
-# Connect to MongoDB (update connection string and database/collection names as needed)
+# Connect to MongoDB (update the connection string and collection names as needed)
 client = MongoClient("mongodb://localhost:27017/")
 db = client["mydatabase"]
 collection = db["mycollection"]
 
-def init_sections():
-    # Initializes a dictionary for each section with two keys: 'steps' (regular) and 'auto' (automated)
-    return {
-        "steps": 0,
-        "auto": 0,
-    }
+def init_section():
+    """Initialize a dictionary for a section with 'steps' (regular) and 'auto' (automated)."""
+    return {"steps": 0, "auto": 0}
+
+# Define section mapping from lowercase to camelCase
+section_mapping = {
+    "healthcheck": "healthCheck",
+    "predeploy": "preDeploy",
+    "deploy": "deploy",
+    "postdeploy": "postDeploy",
+    "precheck": "preCheck",
+    "upgrade": "upgrade",
+    "postcheck": "postCheck",
+    "configaudit": "configAudit",
+    "rollbackautomation": "rollbackAutomation",
+    "assurance": "assurance",
+    "geo": "geo",
+    "disasterrecovery": "disasterRecovery",
+}
 
 @app.route('/api/servers', methods=['GET'])
 def get_server_names():
     """Return a list of distinct server names for the dropdown."""
-    distinct_servers = collection.distinct("name")
-    return jsonify(distinct_servers)
+    servers = collection.distinct("name")
+    return jsonify(servers)
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """
-    Return aggregated data by version filtered by server name.
-    Aggregates for the following columns:
-      - Health Check
-      - Deployment (Pre-Deploy, Deploy, Post-Deploy)
-      - Upgrade (Pre-Check, Upgrade, Post-Check)
-      - Config Audit, Rollback Automation, Assurance, Geo, Disaster Recovery
-    For each, both regular and automated counts are captured.
+    Aggregate data by version filtered by server name.
+    Only process questions with IDs "stepsCount" or "automatedStepsCount" and a valid integer answer.
+    Skip any question that does not have one of these IDs or lacks a valid answer.
     """
     server_name = request.args.get('serverName', None)
     query = {}
@@ -41,81 +51,47 @@ def get_data():
 
     docs = list(collection.find(query))
 
-    from collections import defaultdict
-    # For each version, initialize all sections with a nested dict for counts.
-    aggregated_data = defaultdict(lambda: {
-        "healthCheck": init_sections(),
-        "preDeploy": init_sections(),
-        "deploy": init_sections(),
-        "postDeploy": init_sections(),
-        "preCheck": init_sections(),
-        "upgrade": init_sections(),
-        "postCheck": init_sections(),
-        "configAudit": init_sections(),
-        "rollbackAutomation": init_sections(),
-        "assurance": init_sections(),
-        "geo": init_sections(),
-        "disasterRecovery": init_sections(),
-    })
+    # Initialize aggregation structure for each version with all predefined sections
+    aggregated = defaultdict(lambda: {section: init_section() for section in section_mapping.values()})
 
-    # Process each document. For each question in the document, check its type.
     for doc in docs:
         version = doc.get("version", "Unknown")
         section = doc.get("section_name", "").lower()
-        questions = doc.get("questions", [])
-        
-        # For each question in the doc, add the value to the proper count.
-        for q in questions:
-            try:
-                # Convert values to integer; if conversion fails, ignore the value.
-                value = int(q.get("answer", 0))
-            except ValueError:
-                value = 0
+        agg_section = section_mapping.get(section)
+        if agg_section is None:
+            continue  # Skip unknown sections
 
-            if q.get("questionId") == "stepsCount":
-                count_type = "steps"  # Regular count (to be shown in red)
-            elif q.get("questionId") == "automatedStepsCount":
-                count_type = "auto"   # Automated count (to be shown in green)
-            else:
+        questions = doc.get("questions", [])
+        for q in questions:
+            # Map questionId to count_type; skip if not "stepsCount" or "automatedStepsCount"
+            count_type = {"stepsCount": "steps", "automatedStepsCount": "auto"}.get(q.get("questionId"))
+            if count_type is None:
                 continue
 
-            # Map section names to our aggregated sections.
-            if section == "healthcheck":
-                aggregated_data[version]["healthCheck"][count_type] += value
-            elif section == "predeploy":
-                aggregated_data[version]["preDeploy"][count_type] += value
-            elif section == "deploy":
-                aggregated_data[version]["deploy"][count_type] += value
-            elif section == "postdeploy":
-                aggregated_data[version]["postDeploy"][count_type] += value
-            elif section == "precheck":
-                aggregated_data[version]["preCheck"][count_type] += value
-            elif section == "upgrade":
-                aggregated_data[version]["upgrade"][count_type] += value
-            elif section == "postcheck":
-                aggregated_data[version]["postCheck"][count_type] += value
-            elif section == "configaudit":
-                aggregated_data[version]["configAudit"][count_type] += value
-            elif section == "rollbackautomation":
-                aggregated_data[version]["rollbackAutomation"][count_type] += value
-            elif section == "assurance":
-                aggregated_data[version]["assurance"][count_type] += value
-            elif section == "geo":
-                aggregated_data[version]["geo"][count_type] += value
-            elif section == "disasterrecovery":
-                aggregated_data[version]["disasterRecovery"][count_type] += value
+            # Only process if answer is present and valid
+            answer = q.get("answer")
+            if answer is None:
+                continue  # Skip if no answer is provided (e.g., question was skipped)
 
-    # Prepare the final result. Compute total steps for each version by summing each section's counts.
+            try:
+                value = int(answer)
+            except (ValueError, TypeError):
+                continue  # Skip if answer is not a valid integer
+
+            # Add the value to the corresponding section and count type
+            aggregated[version][agg_section][count_type] += value
+
+    # Compute total counts for each version and build the result
     result = []
-    for version, sections in aggregated_data.items():
-        total_steps = {"steps": 0, "auto": 0}
-        for key, counts in sections.items():
-            total_steps["steps"] += counts["steps"]
-            total_steps["auto"] += counts["auto"]
+    for version, sections in aggregated.items():
+        total = {"steps": 0, "auto": 0}
+        for counts in sections.values():
+            total["steps"] += counts["steps"]
+            total["auto"] += counts["auto"]
 
-        row = {
+        result.append({
             "version": version,
-            "totalSteps": total_steps,
+            "totalSteps": total,
             "healthCheck": sections["healthCheck"],
             "preDeploy": sections["preDeploy"],
             "deploy": sections["deploy"],
@@ -128,8 +104,7 @@ def get_data():
             "assurance": sections["assurance"],
             "geo": sections["geo"],
             "disasterRecovery": sections["disasterRecovery"],
-        }
-        result.append(row)
+        })
 
     return jsonify(result)
 
