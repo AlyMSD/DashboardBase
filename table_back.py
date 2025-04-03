@@ -5,91 +5,131 @@ from pymongo import MongoClient
 app = Flask(__name__)
 CORS(app)
 
-# Example connection to MongoDB
-# Adjust the connection string to your environment
+# Connect to MongoDB (update connection string and database/collection names as needed)
 client = MongoClient("mongodb://localhost:27017/")
 db = client["mydatabase"]
 collection = db["mycollection"]
 
+def init_sections():
+    # Initializes a dictionary for each section with two keys: 'steps' (regular) and 'auto' (automated)
+    return {
+        "steps": 0,
+        "auto": 0,
+    }
+
 @app.route('/api/servers', methods=['GET'])
 def get_server_names():
-    """
-    Returns a list of distinct server names to populate the dropdown.
-    """
-    distinct_servers = collection.distinct("name")  # "name" is the field for the server name
+    """Return a list of distinct server names for the dropdown."""
+    distinct_servers = collection.distinct("name")
     return jsonify(distinct_servers)
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """
-    Returns the data filtered by server name (if provided).
-    Example of grouping or collecting data from different section_names.
+    Return aggregated data by version filtered by server name.
+    Aggregates for the following columns:
+      - Health Check
+      - Deployment (Pre-Deploy, Deploy, Post-Deploy)
+      - Upgrade (Pre-Check, Upgrade, Post-Check)
+      - Config Audit, Rollback Automation, Assurance, Geo, Disaster Recovery
+    For each, both regular and automated counts are captured.
     """
     server_name = request.args.get('serverName', None)
-
     query = {}
     if server_name:
         query["name"] = server_name
-    
-    # Fetch documents matching the server name
+
     docs = list(collection.find(query))
 
-    # Transform the data into a structure that is easy to display in a table.
-    # Suppose each document looks like:
-    # {
-    #   "section_name": "postupgrade",
-    #   "name": "server 1",
-    #   "questions": [
-    #       { "questionId": "stepsCount", "answer": "2" }
-    #   ],
-    #   "version": "2.0"
-    # }
-    #
-    # We'll group data by "version" and then sum up "stepsCount" (or other metrics)
-    # for each "section_name" across all docs that share the same version.
-    
     from collections import defaultdict
-    
-    # Data structure to group by version
-    # Example: aggregated_data[version][section_name] = total_steps
-    aggregated_data = defaultdict(lambda: defaultdict(int))
+    # For each version, initialize all sections with a nested dict for counts.
+    aggregated_data = defaultdict(lambda: {
+        "healthCheck": init_sections(),
+        "preDeploy": init_sections(),
+        "deploy": init_sections(),
+        "postDeploy": init_sections(),
+        "preCheck": init_sections(),
+        "upgrade": init_sections(),
+        "postCheck": init_sections(),
+        "configAudit": init_sections(),
+        "rollbackAutomation": init_sections(),
+        "assurance": init_sections(),
+        "geo": init_sections(),
+        "disasterRecovery": init_sections(),
+    })
 
+    # Process each document. For each question in the document, check its type.
     for doc in docs:
         version = doc.get("version", "Unknown")
-        section = doc.get("section_name", "Unknown")
+        section = doc.get("section_name", "").lower()
         questions = doc.get("questions", [])
-        # Sum stepsCount or other question answers
-        steps_count = 0
+        
+        # For each question in the doc, add the value to the proper count.
         for q in questions:
-            if q.get("questionId") == "stepsCount":
-                steps_count += int(q.get("answer", 0))
-        aggregated_data[version][section] += steps_count
+            try:
+                # Convert values to integer; if conversion fails, ignore the value.
+                value = int(q.get("answer", 0))
+            except ValueError:
+                value = 0
 
-    # Convert aggregated_data into a list for easier JSON serialization
-    # We also want "Total Steps" across all sections, or any other columns you have
+            if q.get("questionId") == "stepsCount":
+                count_type = "steps"  # Regular count (to be shown in red)
+            elif q.get("questionId") == "automatedStepsCount":
+                count_type = "auto"   # Automated count (to be shown in green)
+            else:
+                continue
+
+            # Map section names to our aggregated sections.
+            if section == "healthcheck":
+                aggregated_data[version]["healthCheck"][count_type] += value
+            elif section == "predeploy":
+                aggregated_data[version]["preDeploy"][count_type] += value
+            elif section == "deploy":
+                aggregated_data[version]["deploy"][count_type] += value
+            elif section == "postdeploy":
+                aggregated_data[version]["postDeploy"][count_type] += value
+            elif section == "precheck":
+                aggregated_data[version]["preCheck"][count_type] += value
+            elif section == "upgrade":
+                aggregated_data[version]["upgrade"][count_type] += value
+            elif section == "postcheck":
+                aggregated_data[version]["postCheck"][count_type] += value
+            elif section == "configaudit":
+                aggregated_data[version]["configAudit"][count_type] += value
+            elif section == "rollbackautomation":
+                aggregated_data[version]["rollbackAutomation"][count_type] += value
+            elif section == "assurance":
+                aggregated_data[version]["assurance"][count_type] += value
+            elif section == "geo":
+                aggregated_data[version]["geo"][count_type] += value
+            elif section == "disasterrecovery":
+                aggregated_data[version]["disasterRecovery"][count_type] += value
+
+    # Prepare the final result. Compute total steps for each version by summing each section's counts.
     result = []
-    for version, sections_dict in aggregated_data.items():
-        total_steps = sum(sections_dict.values())
-        result.append({
+    for version, sections in aggregated_data.items():
+        total_steps = {"steps": 0, "auto": 0}
+        for key, counts in sections.items():
+            total_steps["steps"] += counts["steps"]
+            total_steps["auto"] += counts["auto"]
+
+        row = {
             "version": version,
             "totalSteps": total_steps,
-            # If you have specific sections like "healthCheck", "preDeploy", etc., you can add them:
-            "healthCheck": sections_dict.get("healthcheck", 0),
-            "preDeploy": sections_dict.get("predeploy", 0),
-            "deploy": sections_dict.get("deploy", 0),
-            "postDeploy": sections_dict.get("postdeploy", 0),
-            "preCheck": sections_dict.get("precheck", 0),
-            "upgrade": sections_dict.get("upgrade", 0),
-            "postCheck": sections_dict.get("postcheck", 0),
-            "config": sections_dict.get("config", 0),
-            "audit": sections_dict.get("audit", 0),
-            "rollback": sections_dict.get("rollback", 0),
-            "automation": sections_dict.get("automation", 0),
-            "assurance": sections_dict.get("assurance", 0),
-            "geo": sections_dict.get("geo", 0),
-            "disasterRecovery": sections_dict.get("disasterrecovery", 0),
-            # ... add other columns as needed
-        })
+            "healthCheck": sections["healthCheck"],
+            "preDeploy": sections["preDeploy"],
+            "deploy": sections["deploy"],
+            "postDeploy": sections["postDeploy"],
+            "preCheck": sections["preCheck"],
+            "upgrade": sections["upgrade"],
+            "postCheck": sections["postCheck"],
+            "configAudit": sections["configAudit"],
+            "rollbackAutomation": sections["rollbackAutomation"],
+            "assurance": sections["assurance"],
+            "geo": sections["geo"],
+            "disasterRecovery": sections["disasterRecovery"],
+        }
+        result.append(row)
 
     return jsonify(result)
 
