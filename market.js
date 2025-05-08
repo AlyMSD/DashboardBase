@@ -9,8 +9,7 @@ export default function MarketDetail() {
 
   useEffect(() => {
     axios.get(`http://localhost:5000/api/markets/${name}`)
-         .then(r => setMarket(r.data))
-         .catch(() => {});
+         .then(r => setMarket(r.data));
   }, [name]);
 
   if (!market) return <div>Loading…</div>;
@@ -32,7 +31,7 @@ export default function MarketDetail() {
             {Object.keys(market.results).map(slice => (
               <th key={slice}
                   colSpan={2}
-                  style={{ background:"#FFF", border:"1px solid #eee" }}>
+                  style={{ background: "#FFF", border: "1px solid #eee" }}>
                 {slice}
               </th>
             ))}
@@ -48,16 +47,12 @@ export default function MarketDetail() {
           {market.nodes.map(n => (
             <tr key={n.id}>
               <td>{n.id}</td>
-              {Object.values(n.results).flatMap((r, i) => {
-                const total    = r.pass + r.fail;
-                const deployed = r.pass;
-                return [
-                  <td key={n.id+"-tot"+i}>{total}</td>,
-                  <td key={n.id+"-dep"+i} style={{ color:"green" }}>
-                    {deployed}
-                  </td>
-                ];
-              })}
+              {Object.values(n.results).flatMap((r, i) => ([
+                <td key={n.id+"-tot"+i}>{r.total}</td>,
+                <td key={n.id+"-dep"+i} style={{ color: "green" }}>
+                  {r.deployed}
+                </td>
+              ]))}
             </tr>
           ))}
         </tbody>
