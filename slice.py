@@ -6,10 +6,10 @@ CORS(app)
 
 # --- sample data in-memory ---
 slices = {
-    "HERO":   {"pass": 22, "fail": 5, "not_started": 3},
-    "PSS":    {"pass": 27, "fail": 0, "not_started": 2},
-    "FWA":    {"pass": 24, "fail": 3, "not_started": 1},
-    "FWA-1-11":{"pass":27, "fail": 0, "not_started": 0},
+    "HERO":    {"pass": 22, "fail": 5,  "not_started": 3},
+    "PSS":     {"pass": 27, "fail": 0,  "not_started": 2},
+    "FWA":     {"pass": 24, "fail": 3,  "not_started": 1},
+    "FWA-1-11":{"pass": 27, "fail": 0,  "not_started": 0},
 }
 
 markets = [
@@ -19,10 +19,10 @@ markets = [
         "nf":     "vCU",
         "type":   "RAN",
         "results": {
-            "HERO":   {"pass": 20, "fail": 5},
-            "PSS":    {"pass": 23, "fail": 2},
-            "FWA":    {"pass": 21, "fail": 4},
-            "FWA-1-11":{"pass":24, "fail":1},
+            "HERO":    {"pass": 20, "fail": 5},
+            "PSS":     {"pass": 23, "fail": 2},
+            "FWA":     {"pass": 21, "fail": 4},
+            "FWA-1-11":{"pass": 24, "fail": 1},
         },
         "nodes": [
             {
@@ -43,7 +43,6 @@ markets = [
                   "FWA-1-11":{"pass": 3, "fail": 0},
                 }
             },
-            # … more nodes …
         ]
     },
     {
@@ -52,10 +51,10 @@ markets = [
         "nf":     "vCU",
         "type":   "RAN",
         "results": {
-            "HERO":   {"pass": 20, "fail": 7},
-            "PSS":    {"pass": 26, "fail": 1},
-            "FWA":    {"pass": 23, "fail": 4},
-            "FWA-1-11":{"pass":27, "fail":0},
+            "HERO":    {"pass": 20, "fail": 7},
+            "PSS":     {"pass": 26, "fail": 1},
+            "FWA":     {"pass": 23, "fail": 4},
+            "FWA-1-11":{"pass": 27, "fail": 0},
         },
         "nodes": [
             {
