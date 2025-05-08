@@ -9,26 +9,47 @@ export default function MarketDetail() {
 
   useEffect(() => {
     axios.get(`http://localhost:5000/api/markets/${name}`)
-         .then(r => setMarket(r.data));
+         .then(r => setMarket(r.data))
+         .catch(() => {});
   }, [name]);
 
   if (!market) return <div>Loading…</div>;
 
   return (
-    <div style={{ padding:20 }}>
+    <div style={{ padding: 20 }}>
       <button onClick={() => nav(-1)}>← Back</button>
-      <h2>{market.name} — Nodes</h2>
-      <table style={{ width:"50%", borderCollapse:"collapse", marginTop:20 }}>
+      <h2>{market.name} – Nodes Breakdown</h2>
+
+      {/* Node table with same two-row slice headers */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 20, textAlign: "center" }}>
         <thead>
-          <tr><th>Node ID</th><th>Status</th></tr>
+          <tr>
+            <th rowSpan={2} style={{ background: "#FFFBEA" }}>Node ID</th>
+            {Object.keys(market.results).map(slice => (
+              <th key={slice}
+                  colSpan={2}
+                  style={{ background: "#FFF", border: "1px solid #eee" }}>
+                {slice}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            {Object.keys(market.results).flatMap(slice => ([
+              <th key={slice+"-p"} style={{ background: "#E8F5E9" }}>Pass</th>,
+              <th key={slice+"-f"} style={{ background: "#FFEBEE" }}>Fail</th>
+            ]))}
+          </tr>
         </thead>
         <tbody>
           {market.nodes.map(n => (
             <tr key={n.id}>
               <td>{n.id}</td>
-              <td style={{ color: n.status==="fail"?"red":"green" }}>
-                {n.status}
-              </td>
+              {Object.values(n.results).flatMap((r, i) => ([
+                <td key={n.id+"-p"+i} style={{ color: "green" }}>{r.pass}</td>,
+                <td key={n.id+"-f"+i} style={{ color: r.fail ? "red" : "green" }}>
+                  {r.fail}
+                </td>
+              ]))}
             </tr>
           ))}
         </tbody>
