@@ -5,7 +5,7 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-# --- sample data in-memory, only total & deployed for slices unchanged ---
+# Slice summary unchanged
 slices = {
     "HERO":    {"total": 30, "deployed": 22},
     "PSS":     {"total": 29, "deployed": 27},
@@ -13,7 +13,6 @@ slices = {
     "FWA-1-11":{"total": 27, "deployed": 27},
 }
 
-# Markets now have an explicit "id" field
 markets = [
     {
         "id":      1,
@@ -29,14 +28,22 @@ markets = [
         },
         "nodes": [
             {
-                "id":        "node-1",
-                "status":    "online",
-                "timestamp": "2025-05-08T10:15:00Z"
+                "id": "node-1",
+                "results": {
+                  "HERO":    {"status": "online",   "timestamp": "2025-05-08T10:15:00Z"},
+                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T10:10:00Z"},
+                  "FWA":     {"status": "offline",  "timestamp": "2025-05-08T09:45:00Z"},
+                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T09:30:00Z"},
+                }
             },
             {
-                "id":        "node-2",
-                "status":    "offline",
-                "timestamp": "2025-05-08T09:50:30Z"
+                "id": "node-2",
+                "results": {
+                  "HERO":    {"status": "offline",  "timestamp": "2025-05-08T09:50:30Z"},
+                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T09:40:00Z"},
+                  "FWA":     {"status": "degraded", "timestamp": "2025-05-08T09:20:00Z"},
+                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T09:05:00Z"},
+                }
             },
         ]
     },
@@ -54,14 +61,22 @@ markets = [
         },
         "nodes": [
             {
-                "id":        "node-A",
-                "status":    "online",
-                "timestamp": "2025-05-08T11:02:10Z"
+                "id": "node-A",
+                "results": {
+                  "HERO":    {"status": "online",   "timestamp": "2025-05-08T11:02:10Z"},
+                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T10:55:00Z"},
+                  "FWA":     {"status": "online",   "timestamp": "2025-05-08T10:40:00Z"},
+                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T10:30:00Z"},
+                }
             },
             {
-                "id":        "node-B",
-                "status":    "degraded",
-                "timestamp": "2025-05-08T10:45:00Z"
+                "id": "node-B",
+                "results": {
+                  "HERO":    {"status": "degraded", "timestamp": "2025-05-08T10:45:00Z"},
+                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T10:35:00Z"},
+                  "FWA":     {"status": "degraded", "timestamp": "2025-05-08T10:25:00Z"},
+                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T10:15:00Z"},
+                }
             },
         ]
     },
@@ -69,10 +84,7 @@ markets = [
 
 @app.route("/api/slices")
 def get_slices():
-    return jsonify([
-        {"name": name, **vals}
-        for name, vals in slices.items()
-    ])
+    return jsonify([{"name": name, **vals} for name, vals in slices.items()])
 
 @app.route("/api/markets")
 def get_markets():
@@ -84,15 +96,13 @@ def get_markets():
             "nf":      m["nf"],
             "type":    m["type"],
             "results": m["results"]
-        }
-        for m in markets
+        } for m in markets
     ])
 
 @app.route("/api/markets/<market_name>")
 def get_market_detail(market_name):
     for m in markets:
         if m["name"] == market_name:
-            # return only id, name, vendor, nf, type, and nodes with status+timestamp
             return jsonify({
                 "id":      m["id"],
                 "name":    m["name"],
