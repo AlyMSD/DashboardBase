@@ -2,66 +2,26 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-// Simple circular progress: takes percent 0–100
-function CircularProgress({ percent }) {
-  const radius = 30;
-  const stroke = 6;
-  const normalizedRadius = radius - stroke * 2;
-  const circumference = normalizedRadius * 2 * Math.PI;
-  const dash = `${(percent / 100) * circumference} ${circumference}`;
-
-  return (
-    <svg height={radius * 2} width={radius * 2}>
-      <circle
-        stroke="#eee"
-        fill="transparent"
-        strokeWidth={stroke}
-        r={normalizedRadius}
-        cx={radius}
-        cy={radius}
-      />
-      <circle
-        stroke="green"
-        fill="transparent"
-        strokeWidth={stroke}
-        strokeDasharray={dash}
-        strokeDashoffset={0}
-        strokeLinecap="round"
-        r={normalizedRadius}
-        cx={radius}
-        cy={radius}
-      />
-      <text
-        x="50%"
-        y="50%"
-        dominantBaseline="middle"
-        textAnchor="middle"
-        fontSize="12"
-        fill="#333"
-      >
-        {percent}%
-      </text>
-    </svg>
-  );
-}
-
 export default function Dashboard() {
   const [slices, setSlices] = useState([]);
   const [markets, setMarkets] = useState([]);
-  const [filters, setFilters] = useState({
+  // per‐column filter values
+  const [colFilters, setColFilters] = useState({
     id: "",
     name: "",
     vendor: "",
     nf: "",
     type: ""
   });
-  const [visibleFilters, setVisibleFilters] = useState({
+  // which filters are visible
+  const [showFilters, setShowFilters] = useState({
     id: false,
     name: false,
     vendor: false,
     nf: false,
     type: false
   });
+  const [sortCfg, setSortCfg] = useState({ slice: null, key: null, asc: true });
   const nav = useNavigate();
 
   useEffect(() => {
@@ -69,100 +29,192 @@ export default function Dashboard() {
     axios.get("/api/markets").then(r => setMarkets(r.data));
   }, []);
 
-  // toggle filter visibility for a column
-  const toggleFilter = col => {
-    setVisibleFilters(v => ({ ...v, [col]: !v[col] }));
+  const onSort = (slice, key) => {
+    setSortCfg(cfg =>
+      cfg.slice === slice && cfg.key === key
+        ? { ...cfg, asc: !cfg.asc }
+        : { slice, key, asc: true }
+    );
   };
 
-  const handleFilterChange = (col, value) => {
-    setFilters(f => ({ ...f, [col]: value }));
-  };
+  const toggleFilter = col =>
+    setShowFilters(f => ({ ...f, [col]: !f[col] }));
 
-  // apply all column filters
-  const filtered = markets.filter(m =>
-    String(m.id).includes(filters.id) &&
-    m.name.toLowerCase().includes(filters.name.toLowerCase()) &&
-    m.vendor.toLowerCase().includes(filters.vendor.toLowerCase()) &&
-    m.nf.toLowerCase().includes(filters.nf.toLowerCase()) &&
-    m.type.toLowerCase().includes(filters.type.toLowerCase())
-  );
+  const onFilterChange = (col, value) =>
+    setColFilters(f => ({ ...f, [col]: value }));
+
+  // apply all active filters
+  let list = markets.filter(m => {
+    // for each column where filter text is non‐empty, require a match
+    return (
+      (colFilters.id === "" ||
+        String(m.id).toLowerCase().includes(colFilters.id.toLowerCase())) &&
+      (colFilters.name === "" ||
+        m.name.toLowerCase().includes(colFilters.name.toLowerCase())) &&
+      (colFilters.vendor === "" ||
+        m.vendor.toLowerCase().includes(colFilters.vendor.toLowerCase())) &&
+      (colFilters.nf === "" ||
+        m.nf.toLowerCase().includes(colFilters.nf.toLowerCase())) &&
+      (colFilters.type === "" ||
+        m.type.toLowerCase().includes(colFilters.type.toLowerCase()))
+    );
+  });
+
+  // then sort if needed
+  if (sortCfg.slice) {
+    list = [...list].sort((a, b) => {
+      const ar = a.results[sortCfg.slice][sortCfg.key];
+      const br = b.results[sortCfg.slice][sortCfg.key];
+      return sortCfg.asc ? ar - br : br - ar;
+    });
+  }
 
   return (
     <div style={{ padding: 20 }}>
       <h2>VSOP Slice Dashboard</h2>
 
-      {/* Circular summary bars */}
-      <div style={{ display: "flex", gap: 20, marginBottom: 40 }}>
-        {slices.map(s => {
-          const pct = Math.round((s.deployed / s.total) * 100);
-          return (
-            <div key={s.name} style={{
-                flex: 1,
-                textAlign: "center",
-                border: "1px solid #eee",
-                borderRadius: 4,
-                padding: 10
-              }}>
-              <strong>{s.name}</strong>
-              <div style={{ marginTop: 8, marginBottom: 4 }}>
-                <CircularProgress percent={pct} />
-              </div>
-              <div style={{ fontSize: 12 }}>
-                {s.deployed} / {s.total}
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
+        {slices.map(s => (
+          <div
+            key={s.name}
+            style={{
+              flex: 1,
+              padding: 10,
+              border: "1px solid #eee",
+              borderRadius: 4,
+              textAlign: "center"
+            }}
+          >
+            <strong>{s.name}</strong>
+            <br />
+            Total: {s.total}
+            <br />
+            Deployed: <span style={{ color: "green" }}>{s.deployed}</span>
+          </div>
+        ))}
       </div>
 
-      {/* Markets table with clickable headers to toggle filters */}
-      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          textAlign: "center"
+        }}
+      >
         <thead>
+          {/* Header row 1: fixed columns + slice names */}
           <tr>
-            <th onClick={() => toggleFilter('id')} style={{ background: "#FFFBEA", cursor: 'pointer' }}>ID</th>
-            <th onClick={() => toggleFilter('name')} style={{ background: "#FFFBEA", cursor: 'pointer' }}>Market</th>
-            <th onClick={() => toggleFilter('vendor')} style={{ background: "#E3F2FD", cursor: 'pointer' }}>Vendor</th>
-            <th onClick={() => toggleFilter('nf')} style={{ background: "#E8F5E9", cursor: 'pointer' }}>NF</th>
-            <th onClick={() => toggleFilter('type')} style={{ background: "#F3E5F5", cursor: 'pointer' }}>Type</th>
+            <th
+              rowSpan={2}
+              style={{ background: "#FFFBEA", cursor: "pointer" }}
+              onClick={() => toggleFilter("id")}
+            >
+              ID
+            </th>
+            <th
+              rowSpan={2}
+              style={{ background: "#FFFBEA", cursor: "pointer" }}
+              onClick={() => toggleFilter("name")}
+            >
+              Market
+            </th>
+            <th
+              rowSpan={2}
+              style={{ background: "#E3F2FD", cursor: "pointer" }}
+              onClick={() => toggleFilter("vendor")}
+            >
+              Vendor
+            </th>
+            <th
+              rowSpan={2}
+              style={{ background: "#E8F5E9", cursor: "pointer" }}
+              onClick={() => toggleFilter("nf")}
+            >
+              NF
+            </th>
+            <th
+              rowSpan={2}
+              style={{ background: "#F3E5F5", cursor: "pointer" }}
+              onClick={() => toggleFilter("type")}
+            >
+              Type
+            </th>
             {slices.map(s => (
-              <th key={s.name} colSpan={2} style={{ background: "#FFF", border: "1px solid #eee" }}>
+              <th
+                key={s.name}
+                colSpan={2}
+                style={{ background: "#FFF", border: "1px solid #eee" }}
+              >
                 {s.name}
               </th>
             ))}
           </tr>
+
+          {/* Header row 2: per‐slice sort controls */}
           <tr>
-            {slices.flatMap(s => ([
-              <th key={s.name+"-tot"} style={{ background: "#E3F2FD" }}>Total</th>,
-              <th key={s.name+"-dep"} style={{ background: "#E8F5E9" }}>Deployed</th>
-            ]))}
+            {slices.flatMap(s => [
+              <th
+                key={s.name + "-tot"}
+                style={{ background: "#E3F2FD", cursor: "pointer" }}
+                onClick={() => onSort(s.name, "total")}
+              >
+                Total{" "}
+                {sortCfg.slice === s.name && sortCfg.key === "total"
+                  ? sortCfg.asc
+                    ? "↑"
+                    : "↓"
+                  : ""}
+              </th>,
+              <th
+                key={s.name + "-dep"}
+                style={{ background: "#E8F5E9", cursor: "pointer" }}
+                onClick={() => onSort(s.name, "deployed")}
+              >
+                Deployed{" "}
+                {sortCfg.slice === s.name && sortCfg.key === "deployed"
+                  ? sortCfg.asc
+                    ? "↑"
+                    : "↓"
+                  : ""}
+              </th>
+            ])}
           </tr>
-          {/* render filter inputs if visible */}
+
+          {/* Header row 3: per‐column filter inputs */}
           <tr>
-            {['id','name','vendor','nf','type'].map(col => (
-              <th key={col}>
-                {visibleFilters[col] && (
+            {/* for each of the first five, if its filter is shown render an input */}
+            {["id", "name", "vendor", "nf", "type"].map(col => (
+              <th key={"filter-" + col}>
+                {showFilters[col] && (
                   <input
-                    style={{ width: '80%' }}
-                    value={filters[col]}
-                    onChange={e => handleFilterChange(col, e.target.value)}
-                    placeholder="Filter"
+                    type="text"
+                    placeholder={`Filter ${col}`}
+                    value={colFilters[col]}
+                    onChange={e => onFilterChange(col, e.target.value)}
+                    style={{ width: "90%", padding: "4px" }}
                   />
                 )}
               </th>
             ))}
-            {slices.map(s => (
-              <th key={s.name+"-empty"} colSpan={2} />
-            ))}
+            {/* blank cells under slices */}
+            {slices.flatMap(s => [
+              <th key={s.name + "-filt-tot"} />,
+              <th key={s.name + "-filt-dep"} />
+            ])}
           </tr>
         </thead>
+
         <tbody>
-          {filtered.map(m => (
+          {list.map(m => (
             <tr key={m.id}>
               <td>{m.id}</td>
               <td>
                 <a
                   href="#"
-                  onClick={e => { e.preventDefault(); nav(`/market/${m.name}`); }}
+                  onClick={e => {
+                    e.preventDefault();
+                    nav(`/market/${m.name}`);
+                  }}
                   style={{ color: "#1976D2", textDecoration: "none" }}
                 >
                   {m.name}
@@ -171,11 +223,13 @@ export default function Dashboard() {
               <td>{m.vendor}</td>
               <td>{m.nf}</td>
               <td>{m.type}</td>
-              {slices.map((s, i) => {
+              {slices.map(s => {
                 const r = m.results[s.name] || { total: 0, deployed: 0 };
                 return [
-                  <td key={`${s.name}-tot`}>{r.total}</td>,
-                  <td key={`${s.name}-dep`} style={{ color: 'green' }}>{r.deployed}</td>
+                  <td key={s.name + "-tot"}>{r.total}</td>,
+                  <td key={s.name + "-dep"} style={{ color: "green" }}>
+                    {r.deployed}
+                  </td>
                 ];
               })}
             </tr>
