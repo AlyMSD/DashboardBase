@@ -20,23 +20,27 @@ export default function MarketDetail() {
       <button onClick={() => nav(-1)}>← Back</button>
       <h2>{market.name} – Nodes Breakdown</h2>
 
-      {/* Node table with same two-row slice headers */}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 20, textAlign: "center" }}>
+      <table style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        marginTop: 20,
+        textAlign: "center"
+      }}>
         <thead>
           <tr>
             <th rowSpan={2} style={{ background: "#FFFBEA" }}>Node ID</th>
             {Object.keys(market.results).map(slice => (
               <th key={slice}
                   colSpan={2}
-                  style={{ background: "#FFF", border: "1px solid #eee" }}>
+                  style={{ background:"#FFF", border:"1px solid #eee" }}>
                 {slice}
               </th>
             ))}
           </tr>
           <tr>
             {Object.keys(market.results).flatMap(slice => ([
-              <th key={slice+"-p"} style={{ background: "#E8F5E9" }}>Pass</th>,
-              <th key={slice+"-f"} style={{ background: "#FFEBEE" }}>Fail</th>
+              <th key={slice+"-tot"} style={{ background: "#E3F2FD" }}>Total</th>,
+              <th key={slice+"-dep"} style={{ background: "#E8F5E9" }}>Deployed</th>
             ]))}
           </tr>
         </thead>
@@ -44,12 +48,16 @@ export default function MarketDetail() {
           {market.nodes.map(n => (
             <tr key={n.id}>
               <td>{n.id}</td>
-              {Object.values(n.results).flatMap((r, i) => ([
-                <td key={n.id+"-p"+i} style={{ color: "green" }}>{r.pass}</td>,
-                <td key={n.id+"-f"+i} style={{ color: r.fail ? "red" : "green" }}>
-                  {r.fail}
-                </td>
-              ]))}
+              {Object.values(n.results).flatMap((r, i) => {
+                const total    = r.pass + r.fail;
+                const deployed = r.pass;
+                return [
+                  <td key={n.id+"-tot"+i}>{total}</td>,
+                  <td key={n.id+"-dep"+i} style={{ color:"green" }}>
+                    {deployed}
+                  </td>
+                ];
+              })}
             </tr>
           ))}
         </tbody>
