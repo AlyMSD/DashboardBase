@@ -3,9 +3,9 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
-  const [slices,   setSlices]  = useState([]);
-  const [markets,  setMarkets] = useState([]);
-  const [filter,   setFilter]  = useState("");
+  const [slices,  setSlices]  = useState([]);
+  const [markets, setMarkets] = useState([]);
+  const [filter,  setFilter]  = useState("");
   const nav = useNavigate();
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function Dashboard() {
         }}
       />
 
-      {/* Markets table with Total/Deployed slice columns */}
+      {/* Markets table with two‐row slice headers */}
       <table style={{
         width: "100%",
         borderCollapse: "collapse",
@@ -105,7 +105,7 @@ export default function Dashboard() {
               <td>{m.nf}</td>
               <td>{m.type}</td>
               {slices.map((s, i) => {
-                const r = m.results[s.name];
+                const r = m.results[s.name] || { total: 0, deployed: 0 };
                 return [
                   <td key={i+"-tot"}>{r.total}</td>,
                   <td key={i+"-dep"} style={{ color: "green" }}>{r.deployed}</td>
