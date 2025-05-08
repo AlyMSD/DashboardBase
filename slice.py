@@ -1,10 +1,11 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# --- sample data in-memory, only total & deployed ---
+# --- sample data in-memory, only total & deployed for slices unchanged ---
 slices = {
     "HERO":    {"total": 30, "deployed": 22},
     "PSS":     {"total": 29, "deployed": 27},
@@ -12,12 +13,14 @@ slices = {
     "FWA-1-11":{"total": 27, "deployed": 27},
 }
 
+# Markets now have an explicit "id" field
 markets = [
     {
-        "name":   "BostonMarket",
-        "vendor": "Samsung",
-        "nf":     "vCU",
-        "type":   "RAN",
+        "id":      1,
+        "name":    "BostonMarket",
+        "vendor":  "Samsung",
+        "nf":      "vCU",
+        "type":    "RAN",
         "results": {
             "HERO":    {"total": 25, "deployed": 20},
             "PSS":     {"total": 25, "deployed": 23},
@@ -26,30 +29,23 @@ markets = [
         },
         "nodes": [
             {
-                "id": "node-1",
-                "results": {
-                  "HERO":    {"total": 6, "deployed": 5},
-                  "PSS":     {"total": 4, "deployed": 4},
-                  "FWA":     {"total": 3, "deployed": 3},
-                  "FWA-1-11":{"total": 2, "deployed": 2},
-                }
+                "id":        "node-1",
+                "status":    "online",
+                "timestamp": "2025-05-08T10:15:00Z"
             },
             {
-                "id": "node-2",
-                "results": {
-                  "HERO":    {"total": 8, "deployed": 7},
-                  "PSS":     {"total": 6, "deployed": 6},
-                  "FWA":     {"total": 7, "deployed": 5},
-                  "FWA-1-11":{"total": 4, "deployed": 3},
-                }
+                "id":        "node-2",
+                "status":    "offline",
+                "timestamp": "2025-05-08T09:50:30Z"
             },
         ]
     },
     {
-        "name":   "ChicagoMarket",
-        "vendor": "Ericsson",
-        "nf":     "vCU",
-        "type":   "RAN",
+        "id":      2,
+        "name":    "ChicagoMarket",
+        "vendor":  "Ericsson",
+        "nf":      "vCU",
+        "type":    "RAN",
         "results": {
             "HERO":    {"total": 27, "deployed": 20},
             "PSS":     {"total": 27, "deployed": 26},
@@ -58,22 +54,14 @@ markets = [
         },
         "nodes": [
             {
-                "id": "node-A",
-                "results": {
-                  "HERO":    {"total":12, "deployed":10},
-                  "PSS":     {"total": 8, "deployed": 8},
-                  "FWA":     {"total": 8, "deployed": 7},
-                  "FWA-1-11":{"total": 5, "deployed": 5},
-                }
+                "id":        "node-A",
+                "status":    "online",
+                "timestamp": "2025-05-08T11:02:10Z"
             },
             {
-                "id": "node-B",
-                "results": {
-                  "HERO":    {"total":15, "deployed":12},
-                  "PSS":     {"total":11, "deployed":10},
-                  "FWA":     {"total":10, "deployed": 9},
-                  "FWA-1-11":{"total": 6, "deployed": 6},
-                }
+                "id":        "node-B",
+                "status":    "degraded",
+                "timestamp": "2025-05-08T10:45:00Z"
             },
         ]
     },
@@ -90,10 +78,11 @@ def get_slices():
 def get_markets():
     return jsonify([
         {
-            "name":   m["name"],
-            "vendor": m["vendor"],
-            "nf":     m["nf"],
-            "type":   m["type"],
+            "id":      m["id"],
+            "name":    m["name"],
+            "vendor":  m["vendor"],
+            "nf":      m["nf"],
+            "type":    m["type"],
             "results": m["results"]
         }
         for m in markets
@@ -103,7 +92,15 @@ def get_markets():
 def get_market_detail(market_name):
     for m in markets:
         if m["name"] == market_name:
-            return jsonify(m)
+            # return only id, name, vendor, nf, type, and nodes with status+timestamp
+            return jsonify({
+                "id":      m["id"],
+                "name":    m["name"],
+                "vendor":  m["vendor"],
+                "nf":      m["nf"],
+                "type":    m["type"],
+                "nodes":   m["nodes"]
+            })
     return jsonify({"error": "not found"}), 404
 
 if __name__ == "__main__":
