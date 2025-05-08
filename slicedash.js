@@ -46,7 +46,7 @@ function CircularProgress({ percent }) {
 }
 
 export default function Dashboard() {
-  const [slices,  setSlices]  = useState([]);
+  const [slices, setSlices] = useState([]);
   const [markets, setMarkets] = useState([]);
   const [filters, setFilters] = useState({
     id: "",
@@ -55,12 +55,28 @@ export default function Dashboard() {
     nf: "",
     type: ""
   });
+  const [visibleFilters, setVisibleFilters] = useState({
+    id: false,
+    name: false,
+    vendor: false,
+    nf: false,
+    type: false
+  });
   const nav = useNavigate();
 
   useEffect(() => {
     axios.get("/api/slices").then(r => setSlices(r.data));
     axios.get("/api/markets").then(r => setMarkets(r.data));
   }, []);
+
+  // toggle filter visibility for a column
+  const toggleFilter = col => {
+    setVisibleFilters(v => ({ ...v, [col]: !v[col] }));
+  };
+
+  const handleFilterChange = (col, value) => {
+    setFilters(f => ({ ...f, [col]: value }));
+  };
 
   // apply all column filters
   const filtered = markets.filter(m =>
@@ -70,10 +86,6 @@ export default function Dashboard() {
     m.nf.toLowerCase().includes(filters.nf.toLowerCase()) &&
     m.type.toLowerCase().includes(filters.type.toLowerCase())
   );
-
-  const handleFilterChange = (col, value) => {
-    setFilters(f => ({ ...f, [col]: value }));
-  };
 
   return (
     <div style={{ padding: 20 }}>
@@ -103,77 +115,46 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Markets table with per-column filters */}
+      {/* Markets table with clickable headers to toggle filters */}
       <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
         <thead>
-          {/* header row: big labels */}
           <tr>
-            <th rowSpan={3} style={{ background: "#FFFBEA" }}>ID</th>
-            <th rowSpan={3} style={{ background: "#FFFBEA" }}>Market</th>
-            <th rowSpan={3} style={{ background: "#E3F2FD" }}>Vendor</th>
-            <th rowSpan={3} style={{ background: "#E8F5E9" }}>NF</th>
-            <th rowSpan={3} style={{ background: "#F3E5F5" }}>Type</th>
+            <th onClick={() => toggleFilter('id')} style={{ background: "#FFFBEA", cursor: 'pointer' }}>ID</th>
+            <th onClick={() => toggleFilter('name')} style={{ background: "#FFFBEA", cursor: 'pointer' }}>Market</th>
+            <th onClick={() => toggleFilter('vendor')} style={{ background: "#E3F2FD", cursor: 'pointer' }}>Vendor</th>
+            <th onClick={() => toggleFilter('nf')} style={{ background: "#E8F5E9", cursor: 'pointer' }}>NF</th>
+            <th onClick={() => toggleFilter('type')} style={{ background: "#F3E5F5", cursor: 'pointer' }}>Type</th>
             {slices.map(s => (
               <th key={s.name} colSpan={2} style={{ background: "#FFF", border: "1px solid #eee" }}>
                 {s.name}
               </th>
             ))}
           </tr>
-          {/* slice subheaders */}
           <tr>
             {slices.flatMap(s => ([
               <th key={s.name+"-tot"} style={{ background: "#E3F2FD" }}>Total</th>,
               <th key={s.name+"-dep"} style={{ background: "#E8F5E9" }}>Deployed</th>
             ]))}
           </tr>
-          {/* filter inputs */}
+          {/* render filter inputs if visible */}
           <tr>
-            <th>
-              <input
-                style={{ width: "80%" }}
-                value={filters.id}
-                onChange={e => handleFilterChange("id", e.target.value)}
-                placeholder="Filter"
-              />
-            </th>
-            <th>
-              <input
-                style={{ width: "80%" }}
-                value={filters.name}
-                onChange={e => handleFilterChange("name", e.target.value)}
-                placeholder="Filter"
-              />
-            </th>
-            <th>
-              <input
-                style={{ width: "80%" }}
-                value={filters.vendor}
-                onChange={e => handleFilterChange("vendor", e.target.value)}
-                placeholder="Filter"
-              />
-            </th>
-            <th>
-              <input
-                style={{ width: "80%" }}
-                value={filters.nf}
-                onChange={e => handleFilterChange("nf", e.target.value)}
-                placeholder="Filter"
-              />
-            </th>
-            <th>
-              <input
-                style={{ width: "80%" }}
-                value={filters.type}
-                onChange={e => handleFilterChange("type", e.target.value)}
-                placeholder="Filter"
-              />
-            </th>
+            {['id','name','vendor','nf','type'].map(col => (
+              <th key={col}>
+                {visibleFilters[col] && (
+                  <input
+                    style={{ width: '80%' }}
+                    value={filters[col]}
+                    onChange={e => handleFilterChange(col, e.target.value)}
+                    placeholder="Filter"
+                  />
+                )}
+              </th>
+            ))}
             {slices.map(s => (
-              <th key={s.name+"-empty1"} colSpan={2} />
+              <th key={s.name+"-empty"} colSpan={2} />
             ))}
           </tr>
         </thead>
-
         <tbody>
           {filtered.map(m => (
             <tr key={m.id}>
@@ -193,8 +174,8 @@ export default function Dashboard() {
               {slices.map((s, i) => {
                 const r = m.results[s.name] || { total: 0, deployed: 0 };
                 return [
-                  <td key={i+"-tot"}>{r.total}</td>,
-                  <td key={i+"-dep"} style={{ color: "green" }}>{r.deployed}</td>
+                  <td key={`${s.name}-tot`}>{r.total}</td>,
+                  <td key={`${s.name}-dep`} style={{ color: 'green' }}>{r.deployed}</td>
                 ];
               })}
             </tr>
