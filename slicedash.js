@@ -20,23 +20,26 @@ export default function Dashboard() {
 
       {/* Slices summary bar */}
       <div style={{ display: "flex", gap: 20, marginBottom: 40 }}>
-        {slices.map(s => {
-          const pct = Math.round(s.pass / s.total * 100);
-          return (
-            <div key={s.name} style={{
-                flex:1, padding:10,
-                border:"1px solid #eee",
-                borderRadius:4
-              }}>
-              <strong>{s.name}</strong> <em>({pct}%)</em><br/>
-              Total: {s.total} | Deployed: {s.pass}
-            </div>
-          );
-        })}
+        {slices.map(s => (
+          <div key={s.name} style={{
+              flex:1, padding:10,
+              border:"1px solid #eee",
+              borderRadius:4,
+              textAlign: "center"
+            }}>
+            <strong>{s.name}</strong><br/>
+            Total: {s.total}<br/>
+            Deployed: <span style={{ color: "green" }}>{s.deployed}</span>
+          </div>
+        ))}
       </div>
 
       {/* Markets table */}
-      <table style={{ width:"100%", borderCollapse:"collapse", textAlign:"center" }}>
+      <table style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        textAlign: "center"
+      }}>
         <thead>
           <tr>
             <th rowSpan={2} style={{ background: "#FFFBEA" }}>Market</th>
@@ -46,7 +49,7 @@ export default function Dashboard() {
             {Object.keys(markets[0]?.results || {}).map(slice => (
               <th key={slice}
                   colSpan={2}
-                  style={{ background:"#FFF", border:"1px solid #eee" }}>
+                  style={{ background: "#FFF", border: "1px solid #eee" }}>
                 {slice}
               </th>
             ))}
@@ -64,21 +67,17 @@ export default function Dashboard() {
               <td>
                 <a href="#"
                    onClick={e => { e.preventDefault(); nav(`/market/${m.name}`); }}
-                   style={{ color:"#1976D2", textDecoration:"none" }}>
+                   style={{ color: "#1976D2", textDecoration: "none" }}>
                   {m.name}
                 </a>
               </td>
               <td>{m.vendor}</td>
               <td>{m.nf}</td>
               <td>{m.type}</td>
-              {Object.values(m.results).flatMap((r, i) => {
-                const total    = r.pass + r.fail;
-                const deployed = r.pass;
-                return [
-                  <td key={i+"-tot"}>{total}</td>,
-                  <td key={i+"-dep"} style={{ color:"green" }}>{deployed}</td>
-                ];
-              })}
+              {Object.values(m.results).flatMap((r, i) => ([
+                <td key={i+"-tot"}>{r.total}</td>,
+                <td key={i+"-dep"} style={{ color: "green" }}>{r.deployed}</td>
+              ]))}
             </tr>
           ))}
         </tbody>
