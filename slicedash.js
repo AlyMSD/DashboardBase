@@ -3,13 +3,15 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
-  const [slices,   setSlices]   = useState([]);
-  const [markets,  setMarkets]  = useState([]);
+  const [slices,  setSlices]  = useState([]);
+  const [markets, setMarkets] = useState([]);
   const nav = useNavigate();
 
   useEffect(() => {
-    axios.get("http://localhost:5000/api/slices").then(r => setSlices(r.data));
-    axios.get("http://localhost:5000/api/markets").then(r => setMarkets(r.data));
+    axios.get("http://localhost:5000/api/slices")
+         .then(r => setSlices(r.data));
+    axios.get("http://localhost:5000/api/markets")
+         .then(r => setMarkets(r.data));
   }, []);
 
   return (
@@ -22,20 +24,19 @@ export default function Dashboard() {
           const pct = Math.round(s.pass / s.total * 100);
           return (
             <div key={s.name} style={{
-                flex: 1,
-                padding: 10,
-                border: "1px solid #eee",
-                borderRadius: 4
+                flex:1, padding:10,
+                border:"1px solid #eee",
+                borderRadius:4
               }}>
               <strong>{s.name}</strong> <em>({pct}%)</em><br/>
-              Pass: {s.pass} | Fail: {s.fail} | Not Started: {s.not_started}
+              Total: {s.total} | Deployed: {s.pass}
             </div>
           );
         })}
       </div>
 
-      {/* Markets table with two-row header */}
-      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
+      {/* Markets table */}
+      <table style={{ width:"100%", borderCollapse:"collapse", textAlign:"center" }}>
         <thead>
           <tr>
             <th rowSpan={2} style={{ background: "#FFFBEA" }}>Market</th>
@@ -45,15 +46,15 @@ export default function Dashboard() {
             {Object.keys(markets[0]?.results || {}).map(slice => (
               <th key={slice}
                   colSpan={2}
-                  style={{ background: "#FFF", border: "1px solid #eee" }}>
+                  style={{ background:"#FFF", border:"1px solid #eee" }}>
                 {slice}
               </th>
             ))}
           </tr>
           <tr>
             {Object.keys(markets[0]?.results || {}).flatMap(slice => ([
-              <th key={slice+"-pass"} style={{ background: "#E8F5E9" }}>Pass</th>,
-              <th key={slice+"-fail"} style={{ background: "#FFEBEE" }}>Fail</th>
+              <th key={slice+"-tot"} style={{ background: "#E3F2FD" }}>Total</th>,
+              <th key={slice+"-dep"} style={{ background: "#E8F5E9" }}>Deployed</th>
             ]))}
           </tr>
         </thead>
@@ -63,19 +64,21 @@ export default function Dashboard() {
               <td>
                 <a href="#"
                    onClick={e => { e.preventDefault(); nav(`/market/${m.name}`); }}
-                   style={{ color: "#1976D2", textDecoration: "none" }}>
+                   style={{ color:"#1976D2", textDecoration:"none" }}>
                   {m.name}
                 </a>
               </td>
               <td>{m.vendor}</td>
               <td>{m.nf}</td>
               <td>{m.type}</td>
-              {Object.values(m.results).flatMap((r, i) => ([
-                <td key={i+"-p"} style={{ color: "green" }}>{r.pass}</td>,
-                <td key={i+"-f"} style={{ color: r.fail ? "red" : "green" }}>
-                  {r.fail}
-                </td>
-              ]))}
+              {Object.values(m.results).flatMap((r, i) => {
+                const total    = r.pass + r.fail;
+                const deployed = r.pass;
+                return [
+                  <td key={i+"-tot"}>{total}</td>,
+                  <td key={i+"-dep"} style={{ color:"green" }}>{deployed}</td>
+                ];
+              })}
             </tr>
           ))}
         </tbody>
