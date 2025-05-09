@@ -4,7 +4,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# Load environment variables from a .env file (ensure you create one with MONGO_URI)
+# Load environment variables from a .env file (ensure you create one with MONGO_URI and DB_NAME)
 load_dotenv()
 
 app = Flask(__name__)
@@ -13,23 +13,30 @@ CORS(app)
 # MongoDB setup
 def get_db():
     uri = os.getenv("MONGO_URI")
-    if not uri:
-        raise RuntimeError("MONGO_URI environment variable not set")
+    db_name = os.getenv("DB_NAME")
+    if not uri or not db_name:
+        raise RuntimeError("MONGO_URI and DB_NAME environment variables must be set")
     client = MongoClient(uri)
-    # replace 'your_database_name' with your actual DB name
-    return client.get_database('your_database_name')
+    return client.get_database(db_name)
 
 db = get_db()
 
 # Collections
-slices_col = db.get_collection('slices')
 markets_col = db.get_collection('markets')
 
 @app.route("/api/slices")
 def get_slices():
-    # Fetch all slice summaries
-    cursor = slices_col.find({}, {"_id": 0, "name": 1, "total": 1, "deployed": 1})
-    slices = list(cursor)
+    # Aggregate slice totals across all markets
+    cursor = markets_col.find({}, {"_id": 0, "results": 1})
+    aggregate = {}
+    for doc in cursor:
+        for slice_name, vals in doc.get('results', {}).items():
+            if slice_name not in aggregate:
+                aggregate[slice_name] = {'total': 0, 'deployed': 0}
+            aggregate[slice_name]['total'] += vals.get('total', 0)
+            aggregate[slice_name]['deployed'] += vals.get('deployed', 0)
+    # Convert to list of objects
+    slices = [{ 'name': name, **stats } for name, stats in aggregate.items()]
     return jsonify(slices)
 
 @app.route("/api/markets")
