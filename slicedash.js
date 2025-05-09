@@ -12,9 +12,29 @@ export default function Dashboard() {
   const dropdownRefs = useRef({});
   const navigate = useNavigate();
 
+  // Utility to replace empty values with null
+  const sanitize = obj => {
+    if (obj === '' || obj === undefined) return null;
+    if (obj && typeof obj === 'object') {
+      const newObj = Array.isArray(obj) ? [] : {};
+      Object.entries(obj).forEach(([key, val]) => {
+        newObj[key] = sanitize(val);
+      });
+      return newObj;
+    }
+    return obj;
+  };
+
   useEffect(() => {
-    axios.get('http://127.0.0.1:5000/api/slices').then(r => setSlices(r.data));
-    axios.get('http://127.0.0.1:5000/api/markets').then(r => setMarkets(r.data));
+    axios.get('http://127.0.0.1:5000/api/slices').then(response => {
+      const data = response.data.map(s => sanitize(s));
+      setSlices(data);
+    });
+
+    axios.get('http://127.0.0.1:5000/api/markets').then(response => {
+      const data = response.data.map(m => sanitize(m));
+      setMarkets(data);
+    });
 
     const onClick = e => {
       Object.entries(dropdownRefs.current).forEach(([key, el]) => {
@@ -29,16 +49,18 @@ export default function Dashboard() {
 
   const applyFilters = m =>
     String(m.id).includes(filters.id) &&
-    m.name.toLowerCase().includes(filters.market) &&
-    m.vendor.toLowerCase().includes(filters.vendor) &&
-    m.nf.toLowerCase().includes(filters.nf) &&
-    m.type.toLowerCase().includes(filters.type);
+    (m.name || '').toLowerCase().includes(filters.market) &&
+    (m.vendor || '').toLowerCase().includes(filters.vendor) &&
+    (m.nf || '').toLowerCase().includes(filters.nf) &&
+    (m.type || '').toLowerCase().includes(filters.type);
 
   const sortMarkets = data => {
     if (!sortConfig.slice || !sortConfig.field) return data;
     return [...data].sort((a, b) => {
-      const aVal = (a.results[sortConfig.slice] || {})[sortConfig.field] || 0;
-      const bVal = (b.results[sortConfig.slice] || {})[sortConfig.field] || 0;
+      const aRes = a.results?.[sortConfig.slice] || {};
+      const bRes = b.results?.[sortConfig.slice] || {};
+      const aVal = aRes[sortConfig.field] || 0;
+      const bVal = bRes[sortConfig.field] || 0;
       if (sortConfig.direction === 'asc') return aVal - bVal;
       if (sortConfig.direction === 'desc') return bVal - aVal;
       return 0;
@@ -80,7 +102,7 @@ export default function Dashboard() {
       m.nf,
       m.type,
       ...slices.flatMap(s => {
-        const r = m.results[s.name] || { total: 0, deployed: 0 };
+        const r = m.results?.[s.name] || { total: 0, deployed: 0 };
         return [r.total, r.deployed];
       })
     ]);
@@ -112,7 +134,9 @@ export default function Dashboard() {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
           {slices.map(s => {
-            const pct = s.total ? (s.deployed / s.total) * 100 : 0;
+            const total = s.total || 0;
+            const deployed = s.deployed || 0;
+            const pct = total ? (deployed / total) * 100 : 0;
             return (
               <div
                 key={s.name}
@@ -131,8 +155,8 @@ export default function Dashboard() {
                 </div>
                 <div style={{ flex: 1, textAlign: 'left' }}>
                   <h3 style={{ margin: '0 0 8px' }}>{s.name}</h3>
-                  <div>Total: <strong>{s.total}</strong></div>
-                  <div>Deployed: <strong style={{ color: '#2e7d32' }}>{s.deployed}</strong></div>
+                  <div>Total: <strong>{total}</strong></div>
+                  <div>Deployed: <strong style={{ color: '#2e7d32' }}>{deployed}</strong></div>
                 </div>
               </div>
             );
@@ -222,16 +246,16 @@ export default function Dashboard() {
                   <th
                     key={`${s.name}-dep`}
                     style={{ padding: '6px', textAlign: 'center', background: '#eaeaea', cursor: 'pointer' }}
-                    onClick={() =>
+                    onClick(() =>
                       setSortConfig(prev =>
-                        prev.slice === s.name && prev.field === 'deployed'
-                          ? { slice: s.name, field: 'deployed', direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+                        prev.slice === s.name && prev.field==='deployed'
+                          ? { slice: s.name, field: 'deployed', direction: prev.direction==='asc' ? 'desc':'asc' }
                           : { slice: s.name, field: 'deployed', direction: 'asc' }
                       )
-                    }
+                    )
                   >
-                    Deployed {sortConfig.slice === s.name && sortConfig.field === 'deployed' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
-                  </th>,
+                    Deployed {sortConfig.slice===s.name && sortConfig.field==='deployed' ? (sortConfig.direction==='asc' ? '▲':'▼') : ''}
+                  </th>
                 ])}
               </tr>
             </thead>
@@ -255,10 +279,12 @@ export default function Dashboard() {
                   <td style={{ padding: 8 }}>{m.nf}</td>
                   <td style={{ padding: 8 }}>{m.type}</td>
                   {slices.map(s => {
-                    const r = m.results[s.name] || { total: 0, deployed: 0 };
+                    const r = m.results?.[s.name] || {};
+                    const totalVal = r.total || 0;
+                    const depVal = r.deployed || 0;
                     return [
-                      <td key={`${m.id}-${s.name}-tot`} style={{ padding: 8, textAlign: 'right' }}>{r.total}</td>,
-                      <td key={`${m.id}-${s.name}-dep`} style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>{r.deployed}</td>
+                      <td key={`${m.id}-${s.name}-tot`} style={{ padding: 8, textAlign: 'right' }}>{totalVal}</td>,
+                      <td key={`${m.id}-${s.name}-dep`} style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>{depVal}</td>
                     ];
                   })}
                 </tr>
