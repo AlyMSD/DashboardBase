@@ -49,7 +49,7 @@ export default function Dashboard() {
 
   const applyFilters = m =>
     String(m.id).includes(filters.id) &&
-    (m.name || '').toLowerCase().includes(filters.market) &&
+    ((m.name || 'No Name').toLowerCase().includes(filters.market)) &&
     (m.vendor || '').toLowerCase().includes(filters.vendor) &&
     (m.nf || '').toLowerCase().includes(filters.nf) &&
     (m.type || '').toLowerCase().includes(filters.type);
@@ -95,17 +95,20 @@ export default function Dashboard() {
 
   const exportCSV = () => {
     const headers = ['ID', 'Market', 'Vendor', 'NF', 'Type', ...slices.flatMap(s => [`Total ${s.name}`, `Deployed ${s.name}`])];
-    const rows = markets.filter(applyFilters).map(m => [
-      m.id,
-      m.name,
-      m.vendor,
-      m.nf,
-      m.type,
-      ...slices.flatMap(s => {
-        const r = m.results?.[s.name] || { total: 0, deployed: 0 };
-        return [r.total, r.deployed];
-      })
-    ]);
+    const rows = markets.filter(applyFilters).map(m => {
+      const name = m.name || 'No Name';
+      return [
+        m.id,
+        name,
+        m.vendor,
+        m.nf,
+        m.type,
+        ...slices.flatMap(s => {
+          const r = m.results?.[s.name] || { total: 0, deployed: 0 };
+          return [r.total, r.deployed];
+        })
+      ];
+    });
     const csvContent = [headers, ...rows].map(e => e.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -246,13 +249,13 @@ export default function Dashboard() {
                   <th
                     key={`${s.name}-dep`}
                     style={{ padding: '6px', textAlign: 'center', background: '#eaeaea', cursor: 'pointer' }}
-                    onClick(() =>
+                    onClick={() =>
                       setSortConfig(prev =>
                         prev.slice === s.name && prev.field==='deployed'
                           ? { slice: s.name, field: 'deployed', direction: prev.direction==='asc' ? 'desc':'asc' }
                           : { slice: s.name, field: 'deployed', direction: 'asc' }
                       )
-                    )
+                    }
                   >
                     Deployed {sortConfig.slice===s.name && sortConfig.field==='deployed' ? (sortConfig.direction==='asc' ? '▲':'▼') : ''}
                   </th>
@@ -260,35 +263,38 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {sortMarkets(markets.filter(applyFilters)).map(m => (
-                <tr key={m.id}>
-                  <td style={{ padding: 8 }}>{m.id}</td>
-                  <td style={{ padding: 8 }}>
-                    <a
-                      onClick={e => {
-                        e.preventDefault();
-                        navigate(`/market/${m.name}`);
-                      }}
-                      href="#"
-                      style={{ color: '#1976d2', textDecoration: 'none' }}
-                    >
-                      {m.name}
-                    </a>
-                  </td>
-                  <td style={{ padding: 8 }}>{m.vendor}</td>
-                  <td style={{ padding: 8 }}>{m.nf}</td>
-                  <td style={{ padding: 8 }}>{m.type}</td>
-                  {slices.map(s => {
-                    const r = m.results?.[s.name] || {};
-                    const totalVal = r.total || 0;
-                    const depVal = r.deployed || 0;
-                    return [
-                      <td key={`${m.id}-${s.name}-tot`} style={{ padding: 8, textAlign: 'right' }}>{totalVal}</td>,
-                      <td key={`${m.id}-${s.name}-dep`} style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>{depVal}</td>
-                    ];
-                  })}
-                </tr>
-              ))}
+              {sortMarkets(markets.filter(applyFilters)).map(m => {
+                const displayName = m.name || 'No Name';
+                return (
+                  <tr key={m.id}>
+                    <td style={{ padding: 8 }}>{m.id}</td>
+                    <td style={{ padding: 8 }}>
+                      <a
+                        onClick={e => {
+                          e.preventDefault();
+                          navigate(`/market/${displayName}`);
+                        }}
+                        href="#"
+                        style={{ color: '#1976d2', textDecoration: 'none' }}
+                      >
+                        {displayName}
+                      </a>
+                    </td>
+                    <td style={{ padding: 8 }}>{m.vendor}</td>
+                    <td style={{ padding: 8 }}>{m.nf}</td>
+                    <td style={{ padding: 8 }}>{m.type}</td>
+                    {slices.map(s => {
+                      const r = m.results?.[s.name] || {};
+                      const totalVal = r.total || 0;
+                      const depVal = r.deployed || 0;
+                      return [
+                        <td key={`${m.id}-${s.name}-tot`} style={{ padding: 8, textAlign: 'right' }}>{totalVal}</td>,
+                        <td key={`${m.id}-${s.name}-dep`} style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>{depVal}</td>
+                      ];
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
