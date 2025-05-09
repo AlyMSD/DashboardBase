@@ -163,7 +163,7 @@ export default function Dashboard() {
           })}
         </div>
 
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             onClick={exportCSV}
             style={{ padding: '8px 16px', border: 'none', borderRadius: 4, background: '#1976d2', color: '#fff', cursor: 'pointer' }}
