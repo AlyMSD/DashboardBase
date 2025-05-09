@@ -1,117 +1,74 @@
+import os
 from flask import Flask, jsonify
 from flask_cors import CORS
-from datetime import datetime
+from pymongo import MongoClient
+from dotenv import load_dotenv
+
+# Load environment variables from a .env file (ensure you create one with MONGO_URI)
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Slice summary unchanged
-slices = {
-    "HERO":    {"total": 30, "deployed": 22},
-    "PSS":     {"total": 29, "deployed": 27},
-    "FWA":     {"total": 28, "deployed": 24},
-    "FWA-1-11":{"total": 27, "deployed": 27},
-}
+# MongoDB setup
+def get_db():
+    uri = os.getenv("MONGO_URI")
+    if not uri:
+        raise RuntimeError("MONGO_URI environment variable not set")
+    client = MongoClient(uri)
+    # replace 'your_database_name' with your actual DB name
+    return client.get_database('your_database_name')
 
-markets = [
-    {
-        "id":      1,
-        "name":    "BostonMarket",
-        "vendor":  "Samsung",
-        "nf":      "vCU",
-        "type":    "RAN",
-        "results": {
-            "HERO":    {"total": 25, "deployed": 20},
-            "PSS":     {"total": 25, "deployed": 23},
-            "FWA":     {"total": 25, "deployed": 21},
-            "FWA-1-11":{"total": 25, "deployed": 24},
-        },
-        "nodes": [
-            {
-                "id": "node-1",
-                "results": {
-                  "HERO":    {"status": "online",   "timestamp": "2025-05-08T10:15:00Z"},
-                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T10:10:00Z"},
-                  "FWA":     {"status": "offline",  "timestamp": "2025-05-08T09:45:00Z"},
-                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T09:30:00Z"},
-                }
-            },
-            {
-                "id": "node-2",
-                "results": {
-                  "HERO":    {"status": "offline",  "timestamp": "2025-05-08T09:50:30Z"},
-                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T09:40:00Z"},
-                  "FWA":     {"status": "degraded", "timestamp": "2025-05-08T09:20:00Z"},
-                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T09:05:00Z"},
-                }
-            },
-        ]
-    },
-    {
-        "id":      2,
-        "name":    "ChicagoMarket",
-        "vendor":  "Ericsson",
-        "nf":      "vCU",
-        "type":    "RAN",
-        "results": {
-            "HERO":    {"total": 27, "deployed": 20},
-            "PSS":     {"total": 27, "deployed": 26},
-            "FWA":     {"total": 27, "deployed": 23},
-            "FWA-1-11":{"total": 27, "deployed": 27},
-        },
-        "nodes": [
-            {
-                "id": "node-A",
-                "results": {
-                  "HERO":    {"status": "online",   "timestamp": "2025-05-08T11:02:10Z"},
-                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T10:55:00Z"},
-                  "FWA":     {"status": "online",   "timestamp": "2025-05-08T10:40:00Z"},
-                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T10:30:00Z"},
-                }
-            },
-            {
-                "id": "node-B",
-                "results": {
-                  "HERO":    {"status": "degraded", "timestamp": "2025-05-08T10:45:00Z"},
-                  "PSS":     {"status": "online",   "timestamp": "2025-05-08T10:35:00Z"},
-                  "FWA":     {"status": "degraded", "timestamp": "2025-05-08T10:25:00Z"},
-                  "FWA-1-11":{"status": "online",   "timestamp": "2025-05-08T10:15:00Z"},
-                }
-            },
-        ]
-    },
-]
+db = get_db()
+
+# Collections
+slices_col = db.get_collection('slices')
+markets_col = db.get_collection('markets')
 
 @app.route("/api/slices")
 def get_slices():
-    return jsonify([{"name": name, **vals} for name, vals in slices.items()])
+    # Fetch all slice summaries
+    cursor = slices_col.find({}, {"_id": 0, "name": 1, "total": 1, "deployed": 1})
+    slices = list(cursor)
+    return jsonify(slices)
 
 @app.route("/api/markets")
 def get_markets():
-    return jsonify([
-        {
-            "id":      m["id"],
-            "name":    m["name"],
-            "vendor":  m["vendor"],
-            "nf":      m["nf"],
-            "type":    m["type"],
-            "results": m["results"]
-        } for m in markets
-    ])
+    # Fetch all markets (only top-level info)
+    cursor = markets_col.find(
+        {},
+        {"_id": 0, "marketId": 1, "marketName": 1, "vendor": 1, "nf": 1, "nfType": 1, "results": 1}
+    )
+    markets = []
+    for m in cursor:
+        markets.append({
+            "id": m["marketId"],
+            "name": m["marketName"],
+            "vendor": m.get("vendor"),
+            "nf": m.get("nf"),
+            "type": m.get("nfType"),
+            "results": m.get("results", {})
+        })
+    return jsonify(markets)
 
 @app.route("/api/markets/<market_name>")
 def get_market_detail(market_name):
-    for m in markets:
-        if m["name"] == market_name:
-            return jsonify({
-                "id":      m["id"],
-                "name":    m["name"],
-                "vendor":  m["vendor"],
-                "nf":      m["nf"],
-                "type":    m["type"],
-                "nodes":   m["nodes"]
-            })
-    return jsonify({"error": "not found"}), 404
+    # Fetch one market by name
+    m = markets_col.find_one(
+        {"marketName": market_name},
+        {"_id": 0, "marketId": 1, "marketName": 1, "vendor": 1, "nf": 1, "nfType": 1, "nodes": 1}
+    )
+    if not m:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({
+        "id": m["marketId"],
+        "name": m["marketName"],
+        "vendor": m.get("vendor"),
+        "nf": m.get("nf"),
+        "type": m.get("nfType"),
+        "nodes": m.get("nodes", [])
+    })
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # For development only; in production use a WSGI server like gunicorn
+    app.run(debug=True, host='0.0.0.0', port=5000)
