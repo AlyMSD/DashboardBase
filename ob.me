@@ -1,0 +1,509 @@
+Below is a comprehensive onboarding guide for a junior software engineer joining your team. It’s organized into logical sections, covers all supported OSes (Windows, macOS, Linux), and walks through your stack (GitLab, on-prem VMs, Docker, Kubernetes, Python FastAPI/Flask, Ubuntu servers, React). It also embeds SW best practices around Git and collaboration.
+
+---
+
+## 1. Development Environments
+
+### 1.1 Supported Platforms
+
+* **Windows 10+**
+* **macOS 10.15+**
+* **Ubuntu 18.04 / 20.04** (or any modern Linux distro)
+
+> **Tip:** For Windows, we recommend using **WSL2** (Windows Subsystem for Linux) to run Linux-native tools seamlessly.
+
+---
+
+## 2. Local Setup
+
+### 2.1 Prerequisites
+
+1. **Access Credentials**
+
+   * VPN or on-prem network access
+   * GitLab account & SSH key provisioned
+   * Docker registry credentials
+
+2. **Installations by OS**
+
+| Tool           | macOS                                  | Ubuntu                                    | Windows + WSL2                                |
+| -------------- | -------------------------------------- | ----------------------------------------- | --------------------------------------------- |
+| Git            | `brew install git`                     | `sudo apt update && sudo apt install git` | Install WSL2 + in WSL: `sudo apt install git` |
+| Docker Engine  | `brew install docker` + Docker Desktop | `sudo apt install docker.io`              | Docker Desktop (enable WSL2 integration)      |
+| Kubernetes CLI | `brew install kubectl`                 | `sudo snap install kubectl --classic`     | In WSL: `sudo snap install kubectl --classic` |
+| Python 3.10+   | `brew install python`                  | `sudo apt install python3 python3-venv`   | In WSL: same as Ubuntu                        |
+| Node.js & npm  | `brew install node`                    | `sudo apt install nodejs npm`             | `nvm install node` (in WSL)                   |
+| VS Code        | Download from Microsoft site           | `snap install code --classic`             | Download + WSL extension                      |
+
+> **SSH Keys:**
+> Generate with `ssh-keygen -t ed25519 -C "you@company.com"`. Add the public key to GitLab.
+
+---
+
+## 3. Cloning & Bootstrapping the Codebase
+
+1. **Clone the repo**
+
+   ```bash
+   git clone git@gitlab.company.com:team/project.git
+   cd project
+   ```
+
+2. **Environments**
+
+   * Copy sample env files:
+
+     ```bash
+     cp .env.example .env
+     ```
+   * Fill in any secrets (ask the DevOps lead if needed).
+
+3. **Dockerized dev stack**
+
+   ```bash
+   docker-compose up --build
+   ```
+
+   * Brings up:
+
+     * Backend (FastAPI or Flask)
+     * Frontend (React)
+     * Local DB (PostgreSQL/MySQL)
+     * Redis (if used)
+
+4. **Virtualenv (optional)**
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+---
+
+## 4. Git & GitLab Best Practices
+
+### 4.1 Branching Model
+
+* **`main`**: always deployable
+* **`develop`**: integration branch (optional)
+* **Feature branches**:
+
+  ```
+  feature/ABC-123-add-login
+  ```
+* **Bugfix branches**:
+
+  ```
+  bugfix/ABC-456-fix-typo
+  ```
+
+### 4.2 Commit Messages
+
+* Use **Imperative Mood**:
+
+  ```
+  feat(auth): add JWT token refresh endpoint
+  fix(ui): correct button alignment on mobile
+  ```
+* Prefix with type (feat, fix, docs, chore, refactor, test).
+
+### 4.3 Merge Requests (MRs)
+
+1. **Scope:** Keep MRs small (≤ 300 lines changed).
+2. **Description:**
+
+   * Summary of intent
+   * Screenshots or API examples
+   * Link to ticket (ABC-123)
+3. **Reviewers:** Assign 2+ reviewers; one backend, one frontend if full-stack.
+4. **Pipeline:** Ensure your MR’s pipeline passes (lint → tests → build).
+5. **Approvals:** Wait for approvals, then self-merge (unless blocked).
+
+### 4.4 Code Review Tips
+
+* Focus on readability, test coverage, and adherence to team conventions.
+* Ask clarifying questions rather than making assumptions.
+* Be constructive and respectful.
+
+---
+
+## 5. Docker & Kubernetes
+
+### 5.1 Docker Workflow
+
+* **Dockerfile conventions:**
+
+  * Use minimal base images (e.g., `python:3.10-slim`)
+  * Leverage caching by ordering `COPY` & `RUN` steps
+* **Local testing:**
+
+  ```bash
+  docker build -t project-backend:dev .
+  docker run --rm -p 8000:8000 project-backend:dev
+  ```
+
+### 5.2 Kubernetes Basics
+
+* **On-Prem Cluster Access**
+  Request your `kubeconfig` file from the DevOps team.
+* **Namespaces:**
+
+  * `dev`, `staging`, `prod`
+* **kubectl usage:**
+
+  ```bash
+  kubectl get pods -n dev
+  kubectl apply -f k8s/deployment.yaml -n dev
+  kubectl logs -f <pod> -n dev
+  ```
+* **Helm (if used):**
+
+  ```bash
+  helm install project ./helm-chart --namespace dev
+  ```
+
+---
+
+## 6. Backend Frameworks
+
+### 6.1 FastAPI
+
+* **Run locally:**
+
+  ```bash
+  uvicorn app.main:app --reload
+  ```
+* **Key patterns:**
+
+  * Dependency Injection
+  * Pydantic models
+  * Async endpoints
+
+### 6.2 Flask
+
+* **Run locally:**
+
+  ```bash
+  flask run --reload
+  ```
+* **Blueprints** for modular routing.
+
+> **Tests:**
+>
+> * Pytest for unit & integration.
+> * Write new tests alongside features/bugfixes.
+
+---
+
+## 7. Frontend (React.js)
+
+1. **Start dev server:**
+
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
+2. **Component structure:**
+
+   * Feature-based folders
+   * Reusable UI library in `/components/ui`
+3. **Styling:** CSS Modules or styled-components.
+4. **API calls:**
+
+   * Centralized in `/services/api.js`
+   * Use Axios with interceptors for auth.
+
+---
+
+## 8. On-Prem VM / Server Access
+
+* **SSH:**
+
+  ```bash
+  ssh ubuntu@10.0.5.12
+  ```
+* **Common paths:**
+
+  * `/opt/project` – application root
+  * `/var/log/project` – logs
+* **Maintenance tips:**
+
+  * Use `tmux` or `screen` for long-running tasks
+  * Always check disk & memory (`df -h`, `top`)
+
+---
+
+## 9. CI/CD Pipeline (GitLab CI)
+
+* **`.gitlab-ci.yml` structure**:
+
+  ```yaml
+  stages: [lint, test, build, deploy]
+  ```
+* **Artifacts:**
+
+  * Test reports, coverage badges
+* **Environments & Review Apps:**
+
+  * Auto-spin a preview for each MR in namespace `mr-<id>`
+
+---
+
+## 10. Communication & Resources
+
+* **Slack Channels:**
+
+  * `#dev-team` – general questions
+  * `#devops` – infra support
+  * `#frontend`, `#backend` – focused discussion
+* **Wiki:**
+
+  * Internal GitLab Wiki for design docs, architecture diagrams.
+* **Key Contacts:**
+
+  * **Team Lead:** Alice Smith
+  * **DevOps Lead:** Bob Nguyen
+  * **QA Lead:** Carla Ruiz
+
+---
+
+## 11. Next Steps
+
+1. **Pair-programming session** with a mentor to walk through the codebase.
+2. **First ticket:** Triage a small bug, fix, and open an MR following the workflow above.
+3. **Shadow deployment** to the development environment.
+
+---
+
+Below is a new **Section 12: Hands-On Exercise**, which you can insert into the onboarding guide right after “Next Steps.” It walks your junior engineer through spinning up a minimal Flask or FastAPI backend and a React frontend, then wiring them together.
+
+---
+
+## 12. Hands-On Exercise: Build & Integrate a Sample API + React App
+
+### 12.1 Objectives
+
+1. Scaffold a minimal REST API in **Flask** or **FastAPI**
+2. Scaffold a minimal **React** app that fetches and displays data
+3. Run both locally (via Docker or directly) and verify end-to-end integration
+
+---
+
+### 12.2 Part 1 – Backend API
+
+1. **Create a new git repo** (or branch):
+
+   ```bash
+   mkdir sample-integration && cd sample-integration
+   git init
+   ```
+
+2. **Choose your framework**
+
+   * **Flask** example:
+
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     pip install flask
+     ```
+
+     Create `app.py`:
+
+     ```python
+     from flask import Flask, jsonify
+
+     app = Flask(__name__)
+
+     @app.route("/api/message")
+     def message():
+         return jsonify({"message": "Hello from Flask!"})
+
+     if __name__ == "__main__":
+         app.run(host="0.0.0.0", port=5000, debug=True)
+     ```
+   * **FastAPI** example:
+
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     pip install fastapi uvicorn
+     ```
+
+     Create `app.py`:
+
+     ```python
+     from fastapi import FastAPI
+
+     app = FastAPI()
+
+     @app.get("/api/message")
+     async def message():
+         return {"message": "Hello from FastAPI!"}
+     ```
+
+     Run with:
+
+     ```bash
+     uvicorn app:app --host 0.0.0.0 --port 5000 --reload
+     ```
+
+3. **Verify**
+
+   ```bash
+   curl http://localhost:5000/api/message
+   # → {"message":"Hello from Flask!"}  (or FastAPI)
+   ```
+
+4. *(Optional)* Dockerize the backend
+
+   ```dockerfile
+   # Dockerfile
+   FROM python:3.10-slim
+   WORKDIR /app
+   COPY app.py requirements.txt ./
+   RUN pip install -r requirements.txt
+   CMD ["python", "app.py"]
+   ```
+
+   ```bash
+   docker build -t sample-backend .
+   docker run -p 5000:5000 sample-backend
+   ```
+
+---
+
+### 12.3 Part 2 – React Frontend
+
+1. **Scaffold**
+
+   ```bash
+   npx create-react-app sample-frontend
+   cd sample-frontend
+   ```
+
+2. **Add a component**
+   Edit `src/App.js` to fetch and display the message:
+
+   ```jsx
+   import { useEffect, useState } from "react";
+
+   function App() {
+     const [msg, setMsg] = useState("Loading...");
+
+     useEffect(() => {
+       fetch("http://localhost:5000/api/message")
+         .then(res => res.json())
+         .then(data => setMsg(data.message))
+         .catch(() => setMsg("Failed to fetch"));
+     }, []);
+
+     return (
+       <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+         <h1>Sample Integration</h1>
+         <p>Message from API: <strong>{msg}</strong></p>
+       </div>
+     );
+   }
+
+   export default App;
+   ```
+
+3. **Run**
+
+   ```bash
+   npm start
+   ```
+
+   * Your browser should open at `http://localhost:3000` and show:
+
+     > Message from API: *Hello from Flask!* (or FastAPI)
+
+4. *(Optional)* Dockerize the frontend
+
+   ```dockerfile
+   # Dockerfile
+   FROM node:18-alpine AS build
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm install
+   COPY . .
+   RUN npm run build
+
+   FROM nginx:alpine
+   COPY --from=build /app/build /usr/share/nginx/html
+   ```
+
+   ```bash
+   docker build -t sample-frontend .
+   docker run -p 3000:80 sample-frontend
+   ```
+
+---
+
+### 12.4 Part 3 – Bring It Together
+
+1. **Run both services** (either directly or via Docker Compose):
+
+   Create `docker-compose.yml` in `sample-integration/`:
+
+   ```yaml
+   version: "3.8"
+   services:
+     backend:
+       build:
+         context: .
+         dockerfile: Dockerfile.backend   # your backend Dockerfile
+       ports:
+         - "5000:5000"
+     frontend:
+       build:
+         context: sample-frontend
+         dockerfile: Dockerfile.frontend  # your frontend Dockerfile
+       ports:
+         - "3000:80"
+   ```
+
+2. **Launch**:
+
+   ```bash
+   docker-compose up --build
+   ```
+
+3. **Test End-to-End**
+
+   * Visit `http://localhost:3000` and confirm the API message is displayed.
+   * Inspect network requests in browser devtools to see the call to `localhost:5000/api/message`.
+
+---
+
+### 12.5 What to Submit
+
+* A GitLab repo (or MR) containing:
+
+  * `app.py`, `requirements.txt` (and Dockerfile) for backend
+  * `sample-frontend/` with modified `App.js` (and Dockerfile)
+  * Optional: `docker-compose.yml` at project root
+* A short README with:
+
+  * How to run locally
+  * How to run via Docker/Docker Compose
+
+---
+
+This exercise will reinforce:
+
+* project bootstrapping
+* writing minimal REST endpoints (Flask vs. FastAPI)
+* React component lifecycle and data fetching
+* local Docker and Compose workflows
+* end-to-end connectivity
+
+Happy coding!
+
+
+---
+
+Welcome aboard! Feel free to ask questions, raise your hand on Slack, and dive in. We’re happy to help you ramp up quickly.
