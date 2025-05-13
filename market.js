@@ -13,20 +13,34 @@ export default function MarketDetail() {
   const [sortConfig, setSortConfig] = useState({ key: '', direction: '' });
   const navigate = useNavigate();
 
+  // define default slices to always display
+  const defaultSliceNames = ['HERO', 'Public Safety', 'FWA-VBG'];
+
   useEffect(() => {
+    // fetch configured slices and merge with defaults
     axios.get('http://127.0.0.1:5000/api/slices').then(res => {
-      setSlices(res.data);
-      const init = res.data.reduce((acc, s) => ({
+      // res.data is an array of slice objects with `name`
+      const apiSlices = res.data;
+      // build merged list preserving default order, falling back when missing
+      const merged = defaultSliceNames.map(name =>
+        apiSlices.find(s => s.name === name) || { name }
+      );
+      setSlices(merged);
+
+      // init filters for each slice status
+      const init = merged.reduce((acc, s) => ({
         ...acc,
         [`${s.name}_status`]: ''
       }), {});
       setFilters(init);
     });
 
+    // fetch market data
     axios
       .get(`http://127.0.0.1:5000/api/markets/${id}/${nf}/${name}`)
       .then(res => setMarket(res.data));
 
+    // click outside to close filters
     const handleClickOutside = e => {
       Object.entries(dropdownRefs.current).forEach(([key, el]) => {
         if (el && !el.contains(e.target)) {
@@ -45,30 +59,30 @@ export default function MarketDetail() {
       </div>
     );
 
-  // Filter nodes by slice status filters
+  // filter nodes by slice status
   let nodes = market.nodes.filter(n =>
     slices.every(s => {
       const filterVal = filters[`${s.name}_status`].toLowerCase();
-      const status = (n.results[s.name]?.status || '').toLowerCase();
+      const status = (n.results?.[s.name]?.status || '').toLowerCase();
       return status.includes(filterVal);
     })
   );
 
-  // Sort nodes by selected timestamp
+  // sort by timestamp
   if (sortConfig.key) {
     const [sliceName] = sortConfig.key.split('_');
     nodes.sort((a, b) => {
-      const ta = a.results[sliceName]?.timestamp
+      const ta = a.results?.[sliceName]?.timestamp
         ? new Date(a.results[sliceName].timestamp).getTime()
         : 0;
-      const tb = b.results[sliceName]?.timestamp
-        ? new Date(b.results[sliceName].timestamp).getTime()
+      const tb = b.results?.[sliceName]?.timestamp
+        ? new Date(a.results[sliceName].timestamp).getTime()
         : 0;
       return sortConfig.direction === 'asc' ? ta - tb : tb - ta;
     });
   }
 
-  // Export CSV of current nodes
+  // CSV export
   const exportCSV = () => {
     const headers = slices.flatMap(s => [`Status ${s.name}`, `Timestamp ${s.name}`]);
     const rows = nodes.map(n =>
