@@ -15,18 +15,12 @@ export default function MarketDetail() {
 
   useEffect(() => {
     axios.get('http://127.0.0.1:5000/api/slices').then(res => {
-      const dbSlices = res.data;
-      const mandatory = ['HERO', 'Public Safety', 'FWA-VBG'];
-      const fullSlices = [...dbSlices];
-      mandatory.forEach(name => {
-        if (!fullSlices.find(s => s.name === name)) {
-          fullSlices.push({ name });
-        }
-      });
-      setSlices(fullSlices);
-      // initialize filters for each slice
-      const initFilters = fullSlices.reduce((acc, s) => ({ ...acc, [`${s.name}_status`]: '' }), {});
-      setFilters(initFilters);
+      setSlices(res.data);
+      const init = res.data.reduce((acc, s) => ({
+        ...acc,
+        [`${s.name}_status`]: ''
+      }), {});
+      setFilters(init);
     });
 
     axios
@@ -51,7 +45,7 @@ export default function MarketDetail() {
       </div>
     );
 
-  // filter nodes by status filters
+  // Filter nodes by slice status filters
   let nodes = market.nodes.filter(n =>
     slices.every(s => {
       const filterVal = filters[`${s.name}_status`].toLowerCase();
@@ -60,7 +54,7 @@ export default function MarketDetail() {
     })
   );
 
-  // sort nodes by selected slice timestamp
+  // Sort nodes by selected timestamp
   if (sortConfig.key) {
     const [sliceName] = sortConfig.key.split('_');
     nodes.sort((a, b) => {
@@ -68,13 +62,13 @@ export default function MarketDetail() {
         ? new Date(a.results[sliceName].timestamp).getTime()
         : 0;
       const tb = b.results[sliceName]?.timestamp
-        ? new Date(a.results[sliceName].timestamp).getTime()
+        ? new Date(b.results[sliceName].timestamp).getTime()
         : 0;
       return sortConfig.direction === 'asc' ? ta - tb : tb - ta;
     });
   }
 
-  // export CSV with defaults for missing data
+  // Export CSV of current nodes
   const exportCSV = () => {
     const headers = slices.flatMap(s => [`Status ${s.name}`, `Timestamp ${s.name}`]);
     const rows = nodes.map(n =>
@@ -98,7 +92,9 @@ export default function MarketDetail() {
   const toggleSort = sliceName => {
     const key = `${sliceName}_timestamp`;
     let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
     setSortConfig({ key, direction });
   };
 
@@ -106,14 +102,33 @@ export default function MarketDetail() {
     <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
       <button
         onClick={() => navigate(-1)}
-        style={{ background: 'none', border: 'none', color: '#1976d2', cursor: 'pointer', display: 'flex', alignItems: 'center', marginBottom: 16 }}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: '#1976d2',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: 16
+        }}
       >
         <FiArrowLeft style={{ marginRight: 8 }} /> Back
       </button>
       <h2>
         {market.name} ({market.nf}) – Nodes
       </h2>
-      <button onClick={exportCSV} style={{ margin: '12px 0', padding: '8px 16px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+      <button
+        onClick={exportCSV}
+        style={{
+          margin: '12px 0',
+          padding: '8px 16px',
+          background: '#1976d2',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 4,
+          cursor: 'pointer'
+        }}
+      >
         Export as CSV
       </button>
       <div style={{ overflowX: 'auto' }}>
@@ -121,26 +136,96 @@ export default function MarketDetail() {
           <thead>
             <tr>
               {slices.map(s => (
-                <th key={s.name} colSpan={2} style={{ padding: 8, textAlign: 'center', background: '#f0f0f0', borderBottom: '2px solid #ccc' }}>
+                <th
+                  key={s.name}
+                  colSpan={2}
+                  style={{
+                    padding: 8,
+                    textAlign: 'center',
+                    background: '#f0f0f0',
+                    borderBottom: '2px solid #ccc'
+                  }}
+                >
                   {s.name}
                 </th>
               ))}
             </tr>
             <tr>
               {slices.flatMap(s => [
-                <th key={`${s.name}-status`} style={{ position: 'relative', padding: 8, textAlign: 'center', background: '#eaeaea' }}>
+                <th
+                  key={`${s.name}-status`}
+                  style={{
+                    position: 'relative',
+                    padding: 8,
+                    textAlign: 'center',
+                    background: '#eaeaea'
+                  }}
+                >
                   Status
-                  <button onClick={() => setOpenFilter(`${s.name}_status`)} style={{ marginLeft: 4, background: filters[`${s.name}_status`] ? '#1976d2' : 'none', color: filters[`${s.name}_status`] ? '#fff' : '#000', border: 'none', cursor: 'pointer', padding: 2, borderRadius: 4 }}>
+                  <button
+                    onClick={() => setOpenFilter(`${s.name}_status`)}
+                    style={{
+                      marginLeft: 4,
+                      background: filters[`${s.name}_status`] ? '#1976d2' : 'none',
+                      color: filters[`${s.name}_status`] ? '#fff' : '#000',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 2,
+                      borderRadius: 4
+                    }}
+                  >
                     <FiFilter />
                   </button>
                   {openFilter === `${s.name}_status` && (
-                    <div ref={el => (dropdownRefs.current[`${s.name}_status`] = el)} style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 4, background: '#fff', border: '1px solid #ddd', borderRadius: 4, padding: 8, zIndex: 10 }}>
-                      <input type="text" autoFocus placeholder="Filter Status" value={filters[`${s.name}_status`]} onChange={e => setFilters(f => ({ ...f, [`${s.name}_status`]: e.target.value }))} style={{ width: 140, padding: 6, borderRadius: 4, border: '1px solid #ccc' }} />
+                    <div
+                      ref={el => (dropdownRefs.current[`${s.name}_status`] = el)}
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        marginTop: 4,
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        padding: 8,
+                        zIndex: 10
+                      }}
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Filter Status"
+                        value={filters[`${s.name}_status`]}
+                        onChange={e =>
+                          setFilters(f => ({
+                            ...f,
+                            [`${s.name}_status`]: e.target.value
+                          }))
+                        }
+                        style={{
+                          width: 140,
+                          padding: 6,
+                          borderRadius: 4,
+                          border: '1px solid #ccc'
+                        }}
+                      />
                     </div>
                   )}
                 </th>,
-                <th key={`${s.name}-timestamp`} style={{ padding: 8, textAlign: 'center', background: '#eaeaea', cursor: 'pointer' }} onClick={() => toggleSort(s.name)}>
-                  Timestamp {sortConfig.key === `${s.name}_timestamp` && (sortConfig.direction === 'asc' ? <FiChevronUp /> : <FiChevronDown />)}
+                <th
+                  key={`${s.name}-timestamp`}
+                  style={{
+                    padding: 8,
+                    textAlign: 'center',
+                    background: '#eaeaea',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => toggleSort(s.name)}
+                >
+                  Timestamp{' '}
+                  {sortConfig.key === `${s.name}_timestamp` &&
+                    (sortConfig.direction === 'asc' ? <FiChevronUp /> : <FiChevronDown />)}
                 </th>
               ])}
             </tr>
@@ -151,13 +236,24 @@ export default function MarketDetail() {
                 {slices.flatMap(s => {
                   const res = n.results[s.name] || {};
                   const status = res.status || 'NA';
+                  const color =
+                    status.toLowerCase() === 'online'
+                      ? '#2e7d32'
+                      : status.toLowerCase() === 'degraded'
+                      ? '#d32f2f'
+                      : '#555';
                   const tsText = res.timestamp ? new Date(res.timestamp).toLocaleString() : 'NA';
-                  const color = status.toLowerCase() === 'online' ? '#2e7d32' : status.toLowerCase() === 'degraded' ? '#d32f2f' : '#555';
                   return [
-                    <td key={`${idx}-${s.name}-status`} style={{ padding: 12, textAlign: 'center', color }}>
+                    <td
+                      key={`${idx}-${s.name}-status`}
+                      style={{ padding: 12, textAlign: 'center', color }}
+                    >
                       {status}
                     </td>,
-                    <td key={`${idx}-${s.name}-timestamp`} style={{ padding: 12, textAlign: 'center' }}>
+                    <td
+                      key={`${idx}-${s.name}-timestamp`}
+                      style={{ padding: 12, textAlign: 'center' }}
+                    >
                       {tsText}
                     </td>
                   ];
