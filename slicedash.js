@@ -195,44 +195,45 @@ export default function Dashboard() {
 
       {/* Controls */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        marginBottom: 20,
-        flexWrap: 'wrap',
-        gap: '10px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label htmlFor="itemsPerPage" style={{ fontSize: '0.9em', color: '#333' }}>Show:</label>
-          <select
-            id="itemsPerPage"
-            value={itemsPerPage}
-            onChange={handleItemsPerPageChange}
-            style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #ccc', fontSize: '0.9em' }}
-          >
-            {itemsPerPageOptions.map(opt => (
-              <option key={opt} value={opt}>{opt} entries</option>
-            ))}
-          </select>
-        </div>
-        <button
-          onClick={exportCSV}
-          style={{
-            marginLeft: 'auto',
-            padding: '10px 20px',
-            background: '#3498db',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: '0.95em',
-            transition: 'background-color 0.3s ease'
-          }}
-          onMouseOver={e => e.currentTarget.style.backgroundColor = '#2980b9'}
-          onMouseOut={e => e.currentTarget.style.backgroundColor = '#3498db'}
-        >
-          Export as CSV
-        </button>
-      </div>
+  display: 'flex',
+  alignItems: 'center',
+  marginBottom: 20,
+  gap: '16px',
+  justifyContent: 'flex-start',
+  flexWrap: 'wrap'
+}}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <label htmlFor="itemsPerPage" style={{ fontSize: '0.9em', color: '#333' }}>Show:</label>
+    <select
+      id="itemsPerPage"
+      value={itemsPerPage}
+      onChange={handleItemsPerPageChange}
+      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #ccc', fontSize: '0.9em' }}
+    >
+      {itemsPerPageOptions.map(opt => (
+        <option key={opt} value={opt}>{opt} entries</option>
+      ))}
+    </select>
+  </div>
+  <button
+    onClick={exportCSV}
+    style={{
+      padding: '10px 20px',
+      background: '#3498db',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 6,
+      cursor: 'pointer',
+      fontSize: '0.95em',
+      transition: 'background-color 0.3s ease'
+    }}
+    onMouseOver={e => e.currentTarget.style.backgroundColor = '#2980b9'}
+    onMouseOut={e => e.currentTarget.style.backgroundColor = '#3498db'}
+  >
+    Export as CSV
+  </button>
+</div>
+
 
       {/* Table */}
       <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 8, boxShadow: '0 4px 8px rgba(0,0,0,0.05)' }}>
