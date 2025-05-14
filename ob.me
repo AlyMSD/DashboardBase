@@ -1,225 +1,844 @@
-# 30/60/90‑Day Onboarding Plan ✨📘🚀
+# Comprehensive Onboarding Guide & 30/60/90‑Day Plan
 
-Break your first three months into clear milestones, pairing learning objectives with hands‑on tasks drawn from the full onboarding guide. 🗂️🧠📅
-
----
-
-## Days 1–30: Foundations & Local Ramp‑Up 🛠️🧑‍💻🔍
-
-### Objectives
-
-* Configure dev environments on Windows/macOS/Linux with Docker, Kubernetes CLI (`kubectl`), Python, Node.js, and VS Code.
-* Gain GitLab access: SSH keys, VPN/on‑prem network, Docker registry credentials.
-* Master Git workflows (branching, commit conventions, MRs) and bootstrap the codebase.
-* Run the sample FastAPI/Flask + React app locally, both directly and via Docker Compose.
-
-### Key Actions
-
-1. **Environment & Tools Setup**
-
-   * **Access**: Connect VPN or on‑prem network; provision GitLab account; generate SSH key (`ssh-keygen -t ed25519 -C "you@company.com"`), add to GitLab. 🔐🌐🛠️
-   * **Install per OS**:
-
-     | Tool           | macOS                                  | Ubuntu                                    | Windows + WSL2                                |
-     | -------------- | -------------------------------------- | ----------------------------------------- | --------------------------------------------- |
-     | Git            | `brew install git`                     | `sudo apt update && sudo apt install git` | In WSL: `sudo apt install git`                |
-     | Docker Engine  | `brew install docker` + Docker Desktop | `sudo apt install docker.io`              | Docker Desktop with WSL2 integration          |
-     | Kubernetes CLI | `brew install kubectl`                 | `sudo snap install kubectl --classic`     | In WSL: `sudo snap install kubectl --classic` |
-     | Python 3.10+   | `brew install python`                  | `sudo apt install python3 python3-venv`   | In WSL: same as Ubuntu                        |
-     | Node.js & npm  | `brew install node`                    | `sudo apt install nodejs npm`             | In WSL: `nvm install node`                    |
-     | VS Code        | Download from Microsoft site           | `snap install code --classic`             | Download + WSL extension                      |
-
-2. **Clone & Bootstrap Project**
-
-   * `git clone git@gitlab.company.com:team/project.git && cd project`
-   * Copy environment: `cp .env.example .env`; fill secrets; ask DevOps lead as needed.
-   * Run `docker-compose up --build` to launch backend (FastAPI/Flask), React frontend, local Postgres/MySQL, Redis.
-   * *(Optional)* Virtualenv: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`. 💻📦🔧
-
-3. **Git & GitLab Basics**
-
-   * Create feature branch: `git checkout -b feature/ABC-123-description`.
-   * Commit with conventional messages (e.g., `feat(auth): add login endpoint`).
-   * Open MR: include summary, ticket link, screenshots/API examples; assign reviewers; ensure pipeline (lint → tests → build) passes. 🧪📄📥
-
-4. **Run & Extend Sample App**
-
-   * Direct run:
-
-     * Flask: `flask run --reload`
-     * FastAPI: `uvicorn app.main:app --reload`
-   * Curl test: `curl http://localhost:5000/api/message` → JSON response.
-   * React dev: `cd frontend && npm install && npm start`; verify UI.
-   * Add a new endpoint (e.g., `/api/ping`), update React to fetch and display. 🎯⚙️📊
-
-5. **Docker Workflow**
-
-   * Write Dockerfile for service (use `python:3.10-slim`, leverage caching).
-   * Build & run: `docker build -t sample-backend . && docker run -p 5000:5000 sample-backend`. 🐳🛠️🏗️
-
-6. **Slack & Mentorship**
-
-   * Join `#dev-team`, `#devops`, `#frontend`, `#backend`; introduce yourself.
-   * Pair‑program with mentor to explore architecture and repo structure. 🤝💬🧭
+Welcome aboard! This guide leads you through setting up your development environment, mastering workflows, and tackling hands‑on exercises. By Days 30, 60, and 90, you’ll progress from foundational skills to advanced DevOps, cloud‑native delivery, and SRE practices.
 
 ---
 
-## Days 31–60: Collaboration & Project Integration 🧩🤖📡
+## Section 1: Development & Local Environment Setup
 
-### Objectives
+### 1.1 Supported Platforms
 
-* Implement medium‑complexity DevOps tasks: multi‑stage builds, review apps, and secrets management.
-* Begin contributing to main project tickets; deploy to dev/staging using GitLab CI/CD and Helm.
-* Build business‑use case: map UI for NF node visualization and simulated communication flows. 🌐📈🔧
+* Windows 10+ (use WSL2 for Linux tooling)
+* macOS 10.15+
+* Ubuntu 18.04/20.04 (or similar modern distro)
 
-### Key Actions
+### 1.2 Prerequisites & Credentials
 
-1. **Multi‑Stage Docker & CI**
+1. VPN or on‑prem network access
+2. GitLab account with SSH key (`ssh-keygen -t ed25519 -C "you@company.com"`)
+3. Docker registry credentials
 
-   * Refactor Dockerfile: multi‑stage build to minimize image size.
-   * Update `.gitlab-ci.yml`: add multi-stage build job; define `stages: [lint, test, build, deploy]`.
-   * Use CI variables for non‑sensitive configs; manage secrets via GitLab or Vault. 🔐⚙️🛠️
+### 1.3 Install Core Tools by OS
 
-2. **Review Apps & Environments**
-
-   * Configure dynamic review apps: use GitLab environment naming `review/$CI_MERGE_REQUEST_IID`.
-   * Auto-deploy with `helm install --namespace review-$CI_MERGE_REQUEST_IID sample ./sample-integration`. 🚀📦🧪
-
-3. **First Project Contribution**
-
-   * Pick a small bug or feature from backlog; triage, estimate, branch, implement.
-   * Write unit tests (pytest) and React tests (Jest/RTL); ensure coverage.
-   * Open MR; collaborate on code review; merge into `develop` and deploy to staging. 📝🧪🔁
-
-4. **Business Map UI Exercise**
-
-   * **Backend**: ingest or mock NF nodes into Postgres; create endpoints:
-
-     * `GET /api/nodes` → list of `{ id, lat, lon, status }`
-     * `GET /api/links` → list of `{ from: nodeID, to: nodeID }`
-   * **Frontend**: integrate Leaflet or Mapbox GL:
-
-     * Fetch `/api/nodes`, place markers; add tooltips showing metadata.
-     * Fetch `/api/links`, draw polylines; animate to show active comms.
-   * Deploy to review/staging; gather feedback; iterate UI/UX. 🗺️🧭📡
-
-5. **Helm Chart Introduction**
-
-   * Scaffold chart: `helm create sample-integration`; configure `values.yaml`.
-   * Template deployments and services for backend, frontend, map UI.
-   * Parameterize images, replica counts, service types. 📦📐🔁
+| Tool         | macOS                           | Ubuntu                                  | Windows + WSL2                 |
+| ------------ | ------------------------------- | --------------------------------------- | ------------------------------ |
+| Git          | `brew install git`              | `sudo apt update && apt install git`    | In WSL: `sudo apt install git` |
+| Docker       | `brew install docker` + Desktop | `sudo apt install docker.io`            | Docker Desktop (enable WSL2)   |
+| kubectl      | `brew install kubectl`          | `sudo snap install kubectl --classic`   | In WSL: same as Ubuntu         |
+| Python 3.10+ | `brew install python@3.10`      | `sudo apt install python3 python3-venv` | In WSL: same as Ubuntu         |
+| Node & npm   | `brew install node`             | `sudo apt install nodejs npm`           | In WSL: `nvm install node`     |
+| VS Code      | Download from Microsoft site    | `snap install code --classic`           | Download + WSL extension       |
 
 ---
 
-## Days 61–90: Advanced DevOps & Cloud‑Native Delivery
+## Section 2: Cloning & Bootstrapping
 
-### Objectives
+1. **Clone the repo**
 
-* Master high‑complexity deployment patterns: blue/green, canary releases, rollback strategies.
-* Implement infrastructure as code (Terraform) with state management and module reuse.
-* Integrate observability: metrics, logs, tracing (Prometheus, Grafana, ELK, Jaeger).
-* Enhance security: container scanning, vulnerability assessments, RBAC, network policies.
-* Package and promote the sample integration (including map UI) across environments (dev → staging → prod) via Helm.
-* Define SRE practices: SLIs/SLOs, error budgets, and incident response playbooks.
+   ```bash
+   git clone git@gitlab.company.com:team/project.git && cd project
+   ```
+2. **Configure environments**
 
-### Key Actions
+   ```bash
+   cp .env.example .env
+   # Edit .env with secrets (ask DevOps lead)
+   ```
+3. **Launch via Docker Compose**
 
-1. **Deployment Strategies & Traffic Management**
+   ```bash
+   docker-compose up --build
+   ```
 
-   * **Blue/Green Deployments**:
+   * Services: backend (FastAPI/Flask), frontend (React), Postgres/MySQL, Redis
+4. **Optional: Python virtualenv**
 
-     * Create separate Kubernetes namespaces (`blue`, `green`) or duplicate services with distinct labels.
-     * Use a fronting Ingress (NGINX, Istio Gateway) to switch traffic by updating VirtualService or Ingress rules.
-   * **Canary Releases**:
+   ```bash
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
 
-     * Configure Istio DestinationRules and VirtualServices to split traffic (e.g., 10% to new version).
-     * Automate canary promotion in CI: write a GitLab job that applies incremental weight changes and waits for health checks.
-   * **Rollback Automation**:
+---
 
-     * Build a GitLab CI job that triggers `helm rollback` when health checks or metrics breach thresholds.
+## Section 3: Git & GitLab Workflows
 
-2. **Infrastructure as Code with Terraform**
+### 3.1 Branching & Commits
 
-   * **State Management**:
+* **Branches**: `main` (deployable), `develop` (integration), `feature/ABC-xxx`, `bugfix/ABC-xxx`
+* **Commits**: imperative mood (`feat:`, `fix:`, etc.)
 
-     * Store Terraform state in a secure, remote backend (e.g., Azure Blob, AWS S3 with locking via DynamoDB).
-   * **Modular Design**:
+### 3.2 Merge Requests
 
-     * Split infrastructure into reusable modules: network, Kubernetes cluster, VM provisioning, database.
-     * Define input/output variables; version modules in a registry (GitLab or Terraform Cloud).
-   * **CI/CD Integration**:
+1. Small scope (≤ 300 lines)
+2. Detailed description: summary, ticket link, screenshots or API examples
+3. Assign 2+ reviewers (backend & frontend)
+4. Ensure pipeline passes (lint → tests → build)
+5. Merge after approvals
 
-     * Add `terraform fmt`, `terraform validate`, `terraform plan` to the lint/test stages.
-     * On merge to `main`, run `terraform apply` via a protected pipeline with manual approval.
+### 3.3 Code Reviews
 
-3. **Observability & Monitoring**
+* Check readability, test coverage, conventions
+* Ask clarifying questions
+* Provide constructive, respectful feedback
 
-   * **Metrics (Prometheus/Grafana)**:
+---
 
-     * Deploy Prometheus Operator; configure ServiceMonitors for backend, frontend, and map UI pods.
-     * Create Grafana dashboards: request latency, error rate, resource usage, custom application metrics.
-   * **Logging (ELK Stack or EFK)**:
+## Section 4: Docker & Kubernetes Basics
 
-     * Deploy Elasticsearch, Fluentd/FluentBit, and Kibana.
-     * Label logs by environment and service; set up index lifecycle management for retention.
-   * **Tracing (Jaeger/OpenTelemetry)**:
+### 4.1 Docker Workflow
 
-     * Instrument FastAPI/Flask with OpenTelemetry SDK; export traces to Jaeger.
-     * Visualize request flows, identify latency hotspots.
+* **Dockerfile**: minimal base (`python:3.10-slim`), cache‑friendly layering
+* **Local test**:
 
-4. **Security & Compliance**
+  ```bash
+  docker build -t project-backend:dev .
+  docker run --rm -p 8000:8000 project-backend:dev
+  ```
 
-   * **Container Scanning**:
+### 4.2 Kubernetes Access
 
-     * Integrate GitLab’s container scanning audit in the CI pipeline; fail builds on high-severity vulnerabilities.
-   * **Image Signing & Policy Enforcement**:
+* Request `kubeconfig` from DevOps
+* **Namespaces**: dev, staging, prod
+* **kubectl**:
 
-     * Use Notary or Sigstore to sign images; enforce image provenance in admission controllers.
-   * **Kubernetes Security**:
+  ```bash
+  kubectl get pods -n dev
+  kubectl apply -f k8s/deployment.yaml -n dev
+  kubectl logs -f <pod> -n dev
+  ```
+* **Helm**:
 
-     * Define RBAC roles and RoleBindings per namespace; use PSP or PodSecurity admission to restrict privileges.
-     * Apply network policies to limit pod-to-pod communication.
-   * **Secret Management**:
+  ```bash
+  helm install project ./helm-chart --namespace dev
+  ```
 
-     * Store secrets in Vault; integrate Vault Agent injector or External Secrets Operator for runtime injection.
+---
 
-5. **SRE & Operational Excellence**
+## Section 5: Backend Frameworks
 
-   * **Define SLIs/SLOs**:
+### 5.1 FastAPI
 
-     * Write SLOs for API availability (e.g., 99.9% uptime) and latency (<200 ms for 95th percentile).
-     * Configure Prometheus alerts for alerting and incident response.
-   * **Error Budgets & Runbooks**:
+* Run: `uvicorn app.main:app --reload`
+* Patterns: dependency injection, Pydantic models, async endpoints
 
-     * Track error budgets in dashboards; define escalation policies when budgets burn.
-     * Write runbooks for common incident types (pod crash, high latency, unreachable services).
-   * **Disaster Recovery Drills**:
+### 5.2 Flask
 
-     * Practice cluster failover: simulate zone/region outage and validate recovery procedures.
+* Run: `flask run --reload`
+* Structure: use Blueprints for modular routing
 
-6. **Helm Chart Maturity & Promotion Pipeline**
+> **Testing:** use Pytest for unit & integration tests alongside features
 
-   * **Environment Overlays**:
+---
 
-     * Maintain separate `values-dev.yaml`, `values-staging.yaml`, `values-prod.yaml`.
-     * Use Helmfile or GitLab’s review apps to manage multiple releases.
-   * **Chart Testing**:
+## Section 6: Frontend (React)
 
-     * Integrate `helm lint` and `helm unittest` into CI pipeline.
-     * Deploy to a temp namespace and run smoke tests before promoting.
-   * **Promotion Workflow**:
+1. **Start dev server**:
 
-     * Automate release gating: manual approval in GitLab before promoting charts from staging to prod.
+   ```bash
+   cd frontend && npm install && npm start
+   ```
+2. **Structure**: feature‑based folders; shared UI in `/components/ui`
+3. **Styling**: CSS Modules or styled-components
+4. **API**: centralize in `/services/api.js` with Axios interceptors
 
-7. **End‑to‑End Demonstration & Documentation**
+---
 
-   * Host a live demo: showcase full lifecycle from commit to prod deploy, highlight blue/green switch, canary, metrics, and rollback.
-   * Publish an internal case study: architecture diagrams, pipeline configuration, Terraform modules, Helm chart structure, observability dashboards.
-   * Conduct a knowledge transfer session or brown‑bag lunch for the team.
+## Section 7: On‑Prem Servers & VM Access
 
-8. **Career Path & Specialization Planning**
+* **SSH**: `ssh ubuntu@10.0.5.12`
+* **Paths**: `/opt/project` (app), `/var/log/project` (logs)
+* **Maintenance**: `tmux`/`screen`, monitor with `df -h`, `top`
 
-   * Review performance with manager; set goals around areas of interest (security, platform engineering, SRE).
-   * Identify advanced training or certifications (CKA/CKAD, Terraform Associate, CNCF programs).
+---
 
-*Remember to iterate frequently, collaborate cross‑functionally, and document everything. Congratulations on reaching full onboarding capability!*
+## Section 8: CI/CD Pipeline
+
+* `.gitlab-ci.yml` stages: lint, test, build, deploy
+* Artifacts: test reports, coverage badges
+* Review apps: auto‑spin per MR in namespace `mr-<ID>`
+
+---
+
+## Section 9: Communication & Resources
+
+* Join relevant team communication channels for questions and collaboration.
+* Refer to the internal knowledge base (e.g., GitLab Wiki) for design docs and architecture diagrams.
+* Reach out to your assigned mentor or team lead for guidance.
+
+---
+
+## Section 10: Hands‑On Exercise: Build & Integrate a Sample API + React App
+
+### 10.1 Objectives
+
+1. Scaffold a minimal REST API in **Flask** or **FastAPI**
+2. Scaffold a minimal **React** app that fetches and displays data
+3. Run both locally (via Docker or directly) and verify end-to-end integration
+
+---
+
+### 10.2 Part 1 – Backend API
+
+1. **Create a new git repo** (or branch):
+
+   ```bash
+   mkdir sample-integration && cd sample-integration
+   git init
+   ```
+2. **Choose your framework**
+
+   * **Flask** example:
+
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     pip install flask
+     ```
+
+     Create `app.py`:
+
+     ```python
+     from flask import Flask, jsonify
+
+     app = Flask(__name__)
+
+     @app.route("/api/message")
+     def message():
+         return jsonify({"message": "Hello from Flask!"})
+
+     if __name__ == "__main__":
+         app.run(host="0.0.0.0", port=5000, debug=True)
+     ```
+   * **FastAPI** example:
+
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     pip install fastapi uvicorn
+     ```
+
+     Create `app.py`:
+
+     ```python
+     from fastapi import FastAPI
+
+     app = FastAPI()
+
+     @app.get("/api/message")
+     async def message():
+         return {"message": "Hello from FastAPI!"}
+     ```
+
+     Run with:
+
+     ```bash
+     uvicorn app:app --host 0.0.0.0 --port 5000 --reload
+     ```
+3. **Verify**
+
+   ```bash
+   curl http://localhost:5000/api/message
+   # → {"message":"Hello from Flask!"}  (or FastAPI)
+   ```
+4. *(Optional)* Dockerize the backend
+   Create `Dockerfile`:
+
+   ```dockerfile
+   # Dockerfile
+   FROM python:3.10-slim
+   WORKDIR /app
+   COPY app.py requirements.txt ./
+   RUN pip install -r requirements.txt
+   CMD ["python", "app.py"]
+   ```
+
+   Build & run:
+
+   ```bash
+   docker build -t sample-backend .
+   docker run -p 5000:5000 sample-backend
+   ```
+
+---
+
+### 10.3 Part 2 – React Frontend
+
+1. **Scaffold**
+
+   ```bash
+   npx create-react-app sample-frontend
+   cd sample-frontend
+   ```
+2. **Add a component**
+   Edit `src/App.js` to fetch and display the message:
+
+   ```jsx
+   import { useEffect, useState } from "react";
+
+   function App() {
+     const [msg, setMsg] = useState("Loading...");
+
+     useEffect(() => {
+       fetch("http://localhost:5000/api/message")
+         .then(res => res.json())
+         .then(data => setMsg(data.message))
+         .catch(() => setMsg("Failed to fetch"));
+     }, []);
+
+     return (
+       <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+         <h1>Sample Integration</h1>
+         <p>
+           Message from API: <strong>{msg}</strong>
+         </p>
+       </div>
+     );
+   }
+
+   export default App;
+   ```
+3. **Run**
+
+   ```bash
+   npm start
+   ```
+
+   * Browser opens at `http://localhost:3000` showing:
+
+     > Message from API: *Hello from Flask!* (or FastAPI)
+4. *(Optional)* Dockerize the frontend
+   Create `Dockerfile`:
+
+   ```dockerfile
+   # Dockerfile
+   FROM node:18-alpine AS build
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm install
+   COPY . .
+   RUN npm run build
+
+   FROM nginx:alpine
+   COPY --from=build /app/build /usr/share/nginx/html
+   ```
+
+   Build & run:
+
+   ```bash
+   docker build -t sample-frontend .
+   docker run -p 3000:80 sample-frontend
+   ```
+
+---
+
+### 10.4 Part 3 – Bring It Together
+
+1. **Create `docker-compose.yml`** in `sample-integration/`:
+
+   ```yaml
+   version: "3.8"
+   services:
+     backend:
+       build:
+         context: .
+         dockerfile: Dockerfile.backend   # your backend Dockerfile
+       ports:
+         - "5000:5000"
+     frontend:
+       build:
+         context: sample-frontend
+         dockerfile: Dockerfile.frontend  # your frontend Dockerfile
+       ports:
+         - "3000:80"
+   ```
+2. **Launch**
+
+   ```bash
+   docker-compose up --build
+   ```
+3. **Test End-to-End**
+
+   * Visit `http://localhost:3000` and confirm the API message displays.
+   * Inspect network requests to see calls to `localhost:5000/api/message`.
+
+---
+
+### 10.5 What to Submit
+
+* A GitLab repo (or MR) containing:
+
+  * `app.py`, `requirements.txt` (and backend Dockerfile)
+  * `sample-frontend/` with modified `App.js` (and frontend Dockerfile)
+  * `docker-compose.yml` at project root
+* A short README with:
+
+  * How to run locally
+  * How to run via Docker/Docker Compose
+
+---
+
+This exercise reinforces:
+
+* project bootstrapping
+* minimal REST endpoints (Flask vs. FastAPI)
+* React lifecycle & data fetching
+* Docker & Compose workflows
+* end-to-end connectivity
+
+---
+
+## Section 11: DevOps Tasks by Complexity
+
+Break down GitLab CI/CD and infrastructure tasks into three stages of growing complexity. Each stage includes objectives, step-by-step actions, and success criteria.
+
+### Stage 1 – Low Complexity
+
+**Objectives:** Get hands-on with CI basics and simple deployments.
+
+**Tasks & Steps:**
+
+1. **Basic Pipeline Setup**
+
+   * Create `.gitlab-ci.yml` in the root:
+
+     ```yaml
+     stages:
+       - lint
+       - test
+       - build
+     lint_job:
+       stage: lint
+       script: npm run lint
+     test_job:
+       stage: test
+       script: pytest
+     build_job:
+       stage: build
+       script: docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA .
+     ```
+   * Commit & push to trigger pipeline; observe lint/test/build stages in GitLab UI.
+2. **CI Variables**
+
+   * Navigate to **Settings → CI/CD → Variables** in your project.
+   * Add non-sensitive vars (e.g., `API_URL`, `DB_NAME`);
+   * Reference in `.gitlab-ci.yml` via `$VARIABLE_NAME`.
+3. **Deploy to Dev VM**
+
+   * Extend pipeline with a deploy job:
+
+     ```yaml
+     deploy_dev:
+       stage: build
+       script:
+         - ssh ubuntu@DEV_VM_IP "docker pull $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA && docker run -d --rm -p 5000:5000 $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+       only:
+         - develop
+     ```
+   * Confirm app is reachable at `http://DEV_VM_IP:5000`.
+
+**Success Criteria:** Pipeline runs without errors; environment variables injected; dev VM deploys on `develop` branch pushes.
+
+---
+
+### Stage 2 – Medium Complexity
+
+**Objectives:** Introduce multi-stage builds, dynamic review apps, and secure secrets handling.
+
+**Tasks & Steps:**
+
+1. **Multi-Stage Docker Builds**
+
+   * Update `Dockerfile`:
+
+     ```dockerfile
+     FROM node:18-alpine AS build
+     WORKDIR /app
+     COPY package*.json ./
+     RUN npm install
+     COPY . .
+     RUN npm run build
+
+     FROM nginx:alpine
+     COPY --from=build /app/build /usr/share/nginx/html
+     ```
+   * Adjust CI to build multi-stage and push optimized image.
+2. **Dynamic Review Apps**
+
+   * Add a review app job:
+
+     ```yaml
+     review_app:
+       stage: deploy
+       script:
+         - helm upgrade --install review-$CI_MERGE_REQUEST_IID ./helm-chart --namespace review-namespace
+       when: manual
+       only:
+         - merge_requests
+     ```
+   * Review apps spin up per MR; testers can access unique URLs.
+3. **Secrets Management**
+
+   * Integrate HashiCorp Vault or GitLab managed secrets:
+
+     * Store sensitive values in Vault; use Vault agent or GitLab secrets masked variables.
+   * Modify CI to authenticate and fetch secrets:
+
+     ```yaml
+     vault_fetch:
+       script:
+         - vault login $VAULT_TOKEN
+         - vault kv get -format=json secret/app > secrets.json
+     ```
+
+**Success Criteria:** Multi-stage images under 100 MB; review apps deploy automatically per MR; secrets are not logged and accessible to pipelines.
+
+---
+
+### Stage 3 – High Complexity
+
+**Objectives:** Implement advanced deployment patterns, infrastructure as code, and traffic management.
+
+**Tasks & Steps:**
+
+1. **Blue/Green Deployments**
+
+   * Maintain two deployments: `app-blue` & `app-green` in Kubernetes.
+   * Use an Ingress or service to switch traffic labels:
+
+     ```bash
+     kubectl set selector svc/app selector=version=green
+     ```
+   * Automate switch via CI job with health checks:
+
+     ```yaml
+     blue_green_switch:
+       stage: deploy
+       script:
+         - helm upgrade green ./helm-chart --set image.tag=$NEW_TAG
+         - run health tests
+         - helm switch traffic to green
+       when: manual
+     ```
+2. **Canary Releases**
+
+   * Configure Istio VirtualService to route a portion of traffic:
+
+     ```yaml
+     apiVersion: networking.istio.io/v1alpha3
+     kind: VirtualService
+     spec:
+       http:
+         - route:
+             - destination: { host: app, subset: v1, weight: 90 }
+             - destination: { host: app, subset: v2, weight: 10 }
+     ```
+   * Adjust weights in incremental steps within CI and monitor metrics.
+3. **Terraform Infrastructure as Code (IaC)**
+
+   * Structure Terraform modules:
+
+     ```
+     modules/
+       network/
+       kubernetes-cluster/
+       database/
+     main.tf
+     variables.tf
+     outputs.tf
+     ```
+   * Configure remote state:
+
+     ```hcl
+     terraform {
+       backend "s3" {
+         bucket = "project-terraform-state"
+         key    = "env:terraform.tfstate"
+         region = "us-east-1"
+         dynamodb_table = "terraform-lock"
+       }
+     }
+     ```
+   * Add CI jobs:
+
+     ```yaml
+     terraform_plan:
+       stage: test
+       script:
+         - terraform init
+         - terraform plan
+     terraform_apply:
+       stage: deploy
+       when: manual
+       script:
+         - terraform apply -auto-approve
+     ```
+4. **Observability & Monitoring**
+
+   * Deploy Prometheus Operator and Grafana via Helm; configure ServiceMonitors.
+   * Create dashboards for CPU, memory, request latency, error rates.
+   * Instrument application with OpenTelemetry for distributed tracing.
+5. **Traffic Shaping & Rollbacks**
+
+   * Implement automated rollback CI job triggered if health metrics degrade:
+
+     ```yaml
+     rollback_job:
+       stage: deploy
+       script:
+         - helm rollback my-release 1
+       when: on_failure
+     ```
+
+**Success Criteria:** Automated canary and blue/green rollouts; Terraform modules provision infra reliably; end-to-end monitoring with alerts and trace visualization.
+
+---
+
+## Section 12: Business Use Case – NF Map UI
+
+Leverage the above DevOps practices to build and deploy a telecom use case that visualizes NF (network function) nodes and their links on a map.
+
+### 12.1 Data Layer & Backend
+
+1. **Data Ingestion**
+
+   * Create a Python script to mock or import NF node data into PostgreSQL:
+
+     ```python
+     import psycopg2
+     nodes = [ ... ]
+     conn = psycopg2.connect(...)
+     cur = conn.cursor()
+     for n in nodes:
+         cur.execute("INSERT INTO nodes (id, lat, lon, status) VALUES (%s, %s, %s, %s)", n)
+     conn.commit()
+     ```
+2. **API Endpoints**
+
+   * Extend FastAPI/Flask app:
+
+     ```python
+     @app.get("/api/nodes")
+     def get_nodes():
+         return db.query_all_nodes()
+
+     @app.get("/api/links")
+     def get_links():
+         return db.query_all_links()
+     ```
+3. **CI/CD**
+
+   * Add migrations and data load to pipeline:
+
+     ```yaml
+     migrate:
+       stage: deploy
+       script:
+         - alembic upgrade head
+         - python scripts/load_nodes.py
+     ```
+
+### 12.2 Frontend Map UI
+
+1. **Setup Map Library**
+
+   * Install Leaflet or Mapbox GL: `npm install leaflet react-leaflet`
+2. **Render Nodes**
+
+   ```jsx
+   import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+   function MapView() {
+     const [nodes, setNodes] = useState([]);
+     useEffect(() => {
+       fetch('/api/nodes')
+         .then(r => r.json())
+         .then(setNodes);
+     }, []);
+     return (
+       <MapContainer center={[0,0]} zoom={2} style={{ height: '100%' }}>
+         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+         {nodes.map(n => (
+           <Marker key={n.id} position={[n.lat, n.lon]}>
+             <Popup>{`ID: ${n.id}, Status: ${n.status}`}</Popup>
+           </Marker>
+         ))}
+       </MapContainer>
+     );
+   }
+   ```
+3. **Render Links**
+
+   ```jsx
+   import { Polyline } from 'react-leaflet';
+   useEffect(() => {
+     fetch('/api/links')
+       .then(r => r.json())
+       .then(setLinks);
+   }, []);
+   return links.map(link => {
+     const from = nodes.find(n => n.id === link.from);
+     const to = nodes.find(n => n.id === link.to);
+     return <Polyline key={`${link.from}-${link.to}`} positions={[[from.lat, from.lon],[to.lat,to.lon]]} />;
+   });
+   ```
+4. **Animate & Style**
+
+   * Use Leaflet pulse markers or CSS animations to indicate active links.
+5. **Deployment**
+
+   * Package frontend into Docker, deploy via Helm chart under `map-ui` subchart.
+
+**Success Criteria:** Interactive map displaying nodes and links, deployed through CI/CD to staging or production.
+
+---
+
+## Section 13: Cloud‑Native Principles & Helm Charts
+
+Package the entire sample integration (backend, frontend, map UI) into a single Helm chart with environment overlays.
+
+### 13.1 Chart Scaffold & Structure
+
+1. Scaffold:
+
+   ```bash
+   helm create sample-integration
+   ```
+2. Directory overview:
+
+   ```
+   ```
+
+templates/
+deployment.yaml
+service.yaml
+ingress.yaml
+\_helpers.tpl
+values.yaml
+Chart.yaml
+
+````
+
+### 13.2 values.yaml Configuration
+```yaml
+replicaCount: 2
+image:
+repository: $CI_REGISTRY_IMAGE
+pullPolicy: IfNotPresent
+tag: $CI_COMMIT_SHORT_SHA
+service:
+type: LoadBalancer
+port: 80
+ingress:
+enabled: true
+hosts:
+ - host: sample-integration.local
+   paths: ['/']
+````
+
+### 13.3 Templating Deployments & Services
+
+* **Deployment**: parameterize image and replicas.
+* **Service**: expose ports; use clusterIP for internal services.
+* **Ingress**: host and path rules for both frontend and backend using subpaths or subdomains.
+
+### 13.4 Environment Overlays & Promotion
+
+1. Create `values-dev.yaml`, `values-staging.yaml`, `values-prod.yaml` with overrides:
+
+   ```yaml
+   replicaCount: 1
+   image:
+     tag: dev-latest
+   ```
+2. Promotion pipeline:
+
+   ```yaml
+   deploy_dev:
+     stage: deploy
+     script: helm upgrade --install sample-integration ./sample-integration -f values-dev.yaml
+   deploy_staging:
+     stage: deploy
+     when: manual
+     script: helm upgrade --install sample-integration ./sample-integration -f values-staging.yaml
+   deploy_prod:
+     stage: deploy
+     when: manual
+     script: helm upgrade --install sample-integration ./sample-integration -f values-prod.yaml
+   ```
+
+### 13.5 Testing & Validation
+
+* **Lint & Unit Tests**:
+
+  ```bash
+  helm lint sample-integration
+  helm unittest sample-integration
+  ```
+* **Smoke Tests**:
+
+  * After deploy, run basic HTTP checks against health endpoints.
+* **Rollback**:
+
+  ```bash
+  helm rollback sample-integration 1
+  ```
+
+### 13.6 Key Cloud‑Native Principles
+
+* **Immutable Artifacts**: every release uses a new container image tag.
+* **Declarative Configuration**: all desired state defined in YAML templates.
+* **Reusability**: parameterized charts for different environments.
+* **Observability**: include ServiceMonitor manifests and metrics scraping when relevant.
+
+---
+
+# 30/60/90‑Day Plan ✨📘🚀
+
+### Days 1–30: Foundations
+
+* Set up environments, GitLab access, Docker Compose
+* Complete GitLab workflow, bootstrap code, run sample app
+* Extend sample API & React component, merge MR
+
+### Days 31–60: Integration
+
+* Implement medium‑complexity DevOps tasks
+* Contribute code tickets, write tests, deploy to staging
+* Build NF map UI & demo
+
+### Days 61–90: Mastery
+
+* Advanced DevOps (blue/green, canary, rollback)
+* Terraform IaC modules & remote state
+* Observability: Prometheus, Grafana, ELK, tracing
+* Security: scanning, RBAC, network policies, Vault
+* SRE: SLIs/SLOs, error budgets, runbooks, DR drills
+* Helm promotion pipeline & live demo
+* Document case study & host knowledge share
+* Plan next‑step certifications (CKA, Terraform, CNCF)
+
+*Remember: collaborate, ask questions, document your journey!*/90‑Day Plan ✨📘🚀
+
+### Days 1–30: Foundations
+
+* Set up environments, GitLab access, Docker Compose
+* Complete GitLab workflow, bootstrap code, run sample app
+* Extend sample API & React component, merge MR
+
+### Days 31–60: Integration
+
+* Implement medium‑complexity DevOps tasks
+* Contribute code tickets, write tests, deploy to staging
+* Build NF map UI & demo
+
+### Days 61–90: Mastery
+
+* Advanced DevOps (blue/green, canary, rollback)
+* Terraform IaC modules & remote state
+* Observability: Prometheus, Grafana, ELK, tracing
+* Security: scanning, RBAC, network policies, Vault
+* SRE: SLIs/SLOs, error budgets, runbooks, DR drills
+* Helm promotion pipeline & live demo
+* Document case study & host knowledge share
+* Plan next‑step certifications (CKA, Terraform, CNCF)
+
+*Remember: collaborate, ask questions, document your journey!*
