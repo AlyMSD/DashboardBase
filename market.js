@@ -48,41 +48,50 @@ export default function MarketDetail() {
   };
 
   const filteredNodes = useMemo(() => {
-    if (!market) return [];
-    return market.nodes.filter(n => {
-      if (!(n.gnbDuid || '').toString().toLowerCase().includes(filters.gnbDuid.toLowerCase())) return false;
-      return slices.every(s => {
-        const fv = filters[`${s.name}_status`].toLowerCase();
-        const status = (n.Results?.[s.name]?.status || '').toLowerCase();
-        return status.includes(fv);
-      });
+  if (!market) return [];
+  return market.nodes.filter(n => {
+    const matchGnb = (n.gnbDuid || '')
+      .toString()
+      .toLowerCase()
+      .includes(filters.gnbDuid.toLowerCase());
+    const matchSlices = slices.length === 0 || slices.every(s => {
+      const fv = (filters[`${s.name}_status`] || '').toLowerCase();
+      const status = (n.Results?.[s.name]?.status || '').toLowerCase();
+      return status.includes(fv);
     });
-  }, [market, filters, slices]);
+    return matchGnb && matchSlices;
+  });
+}, [market, filters, slices]);
 
-  const sortedNodes = useMemo(() => {
-    let arr = [...filteredNodes];
-    if (sortConfig.key) {
-      const [prefix] = sortConfig.key.split('_');
-      arr.sort((a, b) => {
-        let va, vb;
-        if (prefix === 'GnbDuid') {
-          va = a.gnbDuid || ''; vb = b.gnbDuid || '';
-        } else {
-          va = a.Results?.[prefix]?.timestamp ? new Date(a.Results[prefix].timestamp).getTime() : 0;
-          vb = b.Results?.[prefix]?.timestamp ? new Date(b.Results[prefix].timestamp).getTime() : 0;
-        }
-        if (va < vb) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (va > vb) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    return arr;
-  }, [filteredNodes, sortConfig]);
+const sortedNodes = useMemo(() => {
+  const arr = [...filteredNodes];
+  if (sortConfig.key) {
+    const [prefix] = sortConfig.key.split('_');
+    arr.sort((a, b) => {
+      let va, vb;
+      if (prefix === 'GnbDuid') {
+        va = a.gnbDuid || '';
+        vb = b.gnbDuid || '';
+      } else {
+        va = a.Results?.[prefix]?.timestamp
+          ? new Date(a.Results[prefix].timestamp).getTime()
+          : 0;
+        vb = b.Results?.[prefix]?.timestamp
+          ? new Date(b.Results[prefix].timestamp).getTime()
+          : 0;
+      }
+      if (va < vb) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (va > vb) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  return arr;
+}, [filteredNodes, sortConfig]);
 
-  const currentTableData = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return sortedNodes.slice(start, start + itemsPerPage);
-  }, [currentPage, itemsPerPage, sortedNodes]);
+const currentTableData = useMemo(() => {
+  const start = (currentPage - 1) * itemsPerPage;
+  return sortedNodes.slice(start, start + itemsPerPage);
+}, [currentPage, itemsPerPage, sortedNodes]);
 
   const totalPages = Math.ceil(sortedNodes.length / itemsPerPage);
 
